@@ -10,10 +10,6 @@ const analyticsService = {
   getStudentOverview: async () => {
     const { data } = await api.get('/analytics/overview');
     return data.data;
-  },
-  getStudentOverview: async () => {
-    const { data } = await api.get('/analytics/overview');
-    return data.data;
     // Returns: { overview, subjectStats, weeklyProgress, monthlyProgress, streak, bookmarks }
   },
 
