@@ -1,0 +1,28 @@
+# Root-level ignores
+node_modules/
+.env
+*.log
+.DS_Store
+Thumbs.db
+cookie.txt
+
+# Backend
+backend/node_modules/
+backend/.env
+backend/logs/
+backend/cookie.txt
+backend/uploads/questions/
+backend/uploads/avatars/
+backend/uploads/bulk/
+backend/uploads/imports/
+backend/tmp-import-test.js
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+
+# Database secrets
+database/*.dump
