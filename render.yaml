@@ -1,0 +1,25 @@
+services:
+  # ── Backend API ──────────────────────────────────────────
+  - type: web
+    name: ethio-matric-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node src/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+  # ── Frontend Static Site ─────────────────────────────────
+  - type: web
+    name: ethio-matric-academy
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    # VITE_API_URL is baked into the build via frontend/.env.production
+    # which is committed to the repository (contains only a public URL, no secrets)
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
