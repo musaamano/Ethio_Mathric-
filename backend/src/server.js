@@ -143,6 +143,16 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/import', importRoutes);
 
+// ─── Root route ──────────────────────────────
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Ethio Matric Academy API is running',
+    version: '1.0.0',
+    env:     process.env.NODE_ENV || 'development',
+  });
+});
+
 // ─── Health Check ────────────────────────────
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString(), env: process.env.NODE_ENV });
