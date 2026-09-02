@@ -4,7 +4,11 @@
  */
 import axios from 'axios';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// Ensure the base URL always ends with /api.
+// If VITE_API_URL is set on Render without /api (e.g. https://ethio-matric-api.onrender.com),
+// this guard appends it so all requests still use the correct prefix.
+const rawUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const BASE_URL = rawUrl.endsWith('/api') ? rawUrl : `${rawUrl.replace(/\/$/, '')}/api`;
 
 // ── Main instance ──────────────────────────────────────────
 const api = axios.create({

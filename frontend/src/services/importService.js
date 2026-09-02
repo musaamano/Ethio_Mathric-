@@ -4,7 +4,8 @@
  */
 import api, { getAccessToken } from './api';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const rawUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const BASE_URL = rawUrl.endsWith('/api') ? rawUrl : `${rawUrl.replace(/\/$/, '')}/api`;
 
 const importService = {
   // ── Legacy sync flow (≤ ~200 questions) ──────────────────────
