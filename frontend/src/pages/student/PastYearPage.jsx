@@ -22,18 +22,18 @@ import { snakeToTitle } from '../../utils/helpers';
 
 // ── Subject icon map (same as SubjectsPage) ──────────────────
 const SUBJECT_ICONS = {
-  'math-natural':    '📐',
-  'math-social':     '📐',
-  'physics':         '⚛️',
-  'chemistry':       '🧪',
-  'biology':         '🧬',
+  'math-natural': '📐',
+  'math-social': '📐',
+  'physics': '⚛️',
+  'chemistry': '🧪',
+  'biology': '🧬',
   'english-natural': '📖',
-  'english-social':  '📖',
-  'ict':             '💻',
-  'economics':       '📊',
-  'history':         '🏛️',
-  'geography':       '🌍',
-  'citizenship':     '⚖️',
+  'english-social': '📖',
+  'ict': '💻',
+  'economics': '📊',
+  'history': '🏛️',
+  'geography': '🌍',
+  'citizenship': '⚖️',
 };
 
 // ── Breadcrumb ───────────────────────────────────────────────
@@ -49,7 +49,7 @@ function Breadcrumb({ year, onReset, onBackToYears }) {
       {year && (
         <>
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7"/>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
           </svg>
           <button
             onClick={onBackToYears}
@@ -79,7 +79,7 @@ function YearCard({ year, onSelect }) {
         group-hover:bg-green-gradient group-hover:shadow-glow-green transition-all duration-200">
         <span className="text-xl group-hover:hidden">📅</span>
         <svg className="w-5 h-5 text-white hidden group-hover:block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7"/>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
         </svg>
       </div>
       <p className="font-display font-extrabold text-2xl text-primary-700 group-hover:text-primary-600">
@@ -92,7 +92,7 @@ function YearCard({ year, onSelect }) {
 
 // ── Subject card ─────────────────────────────────────────────
 function SubjectCard({ subject, year, onSelect }) {
-  const icon  = SUBJECT_ICONS[subject.slug] || '📘';
+  const icon = SUBJECT_ICONS[subject.slug] || '📘';
   const color = subject.color || '#52B788';
 
   return (
@@ -122,7 +122,7 @@ function SubjectCard({ subject, year, onSelect }) {
             transition-all flex-shrink-0"
           fill="none" viewBox="0 0 24 24" stroke="currentColor"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7"/>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
         </svg>
       </div>
       <div className="mt-3 flex items-center gap-1.5">
@@ -139,20 +139,20 @@ function SubjectCard({ subject, year, onSelect }) {
 // Main Component
 // ─────────────────────────────────────────────────────────────
 export default function PastYearPage() {
-  const { user }     = useAuth();
-  const navigate     = useNavigate();
-  const toast        = useToast();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const toast = useToast();
 
   // step: 'years' | 'subjects'
-  const [step,          setStep]     = useState('years');
-  const [selectedYear,  setYear]     = useState(null);
+  const [step, setStep] = useState('years');
+  const [selectedYear, setYear] = useState(null);
 
-  const [years,         setYears]    = useState([]);
-  const [subjects,      setSubjects] = useState([]);   // all subjects for student's stream
-  const [filteredSubs,  setFiltered] = useState([]);   // subjects that have questions for selected year
+  const [years, setYears] = useState([]);
+  const [subjects, setSubjects] = useState([]);   // all subjects for student's stream
+  const [filteredSubs, setFiltered] = useState([]);   // subjects that have questions for selected year
 
-  const [loadingYears,  setLoadingYears]    = useState(true);
-  const [loadingSubs,   setLoadingSubs]     = useState(false);
+  const [loadingYears, setLoadingYears] = useState(true);
+  const [loadingSubs, setLoadingSubs] = useState(false);
 
   // ── 1. Load stream subjects + available years on mount ────
   useEffect(() => {
@@ -178,7 +178,7 @@ export default function PastYearPage() {
 
         // Fetch years, filtered to this stream's subject IDs
         const subjectIds = streamSubjects.map(s => s.id).join(',');
-        const yearsData  = await questionService.getAvailableYears(
+        const yearsData = await questionService.getAvailableYears(
           subjectIds ? { subject_ids: subjectIds } : {}
         );
         setYears(Array.isArray(yearsData) ? yearsData : []);
@@ -220,21 +220,33 @@ export default function PastYearPage() {
   }, [subjects]);
 
   // ── 3. Subject selected → navigate to PracticePage ────────
-  const handleSubjectSelect = (subject) => {
+  const handleSubjectSelect = async (subject) => {
     // PracticePage already handles year param — reuses all question/answer logic
+    const isPremiumUser = !!(user?.has_active_subscription || user?.subscription_status === 'active');
+    let requestedCount = 100;
+
+    if (!isPremiumUser) {
+      try {
+        const usage = await questionService.getSubjectDailyUsage(subject.id);
+        requestedCount = Math.max(1, Math.min(100, usage.remaining));
+      } catch {
+        requestedCount = 20;
+      }
+    }
+
     navigate(
-      `/dashboard/practice?subject_id=${subject.id}&year=${selectedYear}&mode=past_year&count=100`
+      `/dashboard/practice?subject_id=${subject.id}&year=${selectedYear}&mode=past_year&count=${requestedCount}`
     );
   };
 
   // ── Helpers ───────────────────────────────────────────────
-  const handleReset     = () => { setStep('years'); setYear(null); };
+  const handleReset = () => { setStep('years'); setYear(null); };
   const handleBackYears = () => { setStep('years'); };
 
   const streamLabel = () => {
     if (!user?.stream) return '';
     if (user.stream === 'natural_science') return '🔬 Natural Science';
-    if (user.stream === 'social_science')  return '📰 Social Science';
+    if (user.stream === 'social_science') return '📰 Social Science';
     return snakeToTitle(user.stream);
   };
 
@@ -303,7 +315,7 @@ export default function PastYearPage() {
               hover:text-primary-600 transition-colors -mt-2"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7"/>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
             </svg>
             Back to years
           </button>

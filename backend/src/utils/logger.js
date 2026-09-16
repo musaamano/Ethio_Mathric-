@@ -2,12 +2,36 @@
  * Winston Logger
  */
 const winston = require('winston');
-const path    = require('path');
+const path = require('path');
 
 const { combine, timestamp, printf, colorize, errors } = winston.format;
 
-const logFormat = printf(({ level, message, timestamp, stack }) => {
-  return `${timestamp} [${level}]: ${stack || message}`;
+const redactMetadata = (value) => {
+  if (Array.isArray(value)) return value.map(redactMetadata);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [
+      key,
+      /secret|token|password|authorization|api[-_]?key/i.test(key)
+        ? '[REDACTED]'
+        : redactMetadata(entry),
+    ]));
+  }
+  return value;
+};
+
+const serializeMetadata = (metadata) => {
+  try {
+    return JSON.stringify(redactMetadata(metadata));
+  } catch {
+    return '[Unserializable metadata]';
+  }
+};
+
+const logFormat = printf(({ level, message, timestamp, stack, ...metadata }) => {
+  const extra = Object.keys(metadata).length > 0
+    ? ` ${serializeMetadata(metadata)}`
+    : '';
+  return `${timestamp} [${level}]: ${stack || message}${extra}`;
 });
 
 const logger = winston.createLogger({

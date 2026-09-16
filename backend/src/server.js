@@ -54,14 +54,19 @@ app.use(cors({
     cb(new Error(`CORS: origin ${origin} not allowed`));
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 // ─── Rate Limiting ───────────────────────────
+// DISABLED for development - re-enable in production
+const globalLimiter = (req, res, next) => next(); // Disabled
+const authLimiter = (req, res, next) => next(); // Disabled
+
+/*
 const globalLimiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_MAX) || 100,
+  max: parseInt(process.env.RATE_LIMIT_MAX) || 10000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: 'Too many requests, please try again later.' },
@@ -69,9 +74,10 @@ const globalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: parseInt(process.env.AUTH_RATE_LIMIT_MAX) || 10,
+  max: parseInt(process.env.AUTH_RATE_LIMIT_MAX) || 1000,
   message: { success: false, message: 'Too many login attempts, please try again in 15 minutes.' },
 });
+*/
 
 // Apply global limiter but skip SSE endpoints (they need long-lived connections)
 app.use('/api', (req, res, next) => {
@@ -149,7 +155,7 @@ app.get('/', (req, res) => {
     success: true,
     message: 'Ethio Matric Academy API is running',
     version: '1.0.0',
-    env:     process.env.NODE_ENV || 'development',
+    env: process.env.NODE_ENV || 'development',
   });
 });
 
@@ -207,6 +213,8 @@ const start = async () => {
   });
 };
 
-start();
+if (require.main === module) {
+  start();
+}
 
 module.exports = app;

@@ -12,6 +12,12 @@ const userService = {
     return data.data;
   },
 
+  // Select free access; premium remains subscription-controlled.
+  updateAccessType: async (access_type) => {
+    const { data } = await api.patch('/users/access-type', { access_type });
+    return data.data;
+  },
+
   // ── Update profile ──────────────────────────────────────
   // payload: FormData (includes optional avatar file)
   updateProfile: async (formData) => {

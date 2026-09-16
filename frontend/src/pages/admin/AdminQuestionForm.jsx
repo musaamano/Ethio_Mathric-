@@ -5,7 +5,7 @@
  *   Past Year → year = selected year (required)
  */
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import questionService from '../../services/questionService';
 import subjectService  from '../../services/subjectService';
@@ -29,6 +29,8 @@ export default function AdminQuestionForm() {
   const isEdit   = !!id;
   const navigate = useNavigate();
   const toast    = useToast();
+  const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get('return') || '/admin/questions';
 
   const [subjects,      setSubjects]      = useState([]);
   const [loading,       setLoading]       = useState(false);
@@ -64,6 +66,21 @@ export default function AdminQuestionForm() {
   useEffect(() => {
     subjectService.getSubjects().then(setSubjects).catch(() => {});
   }, []);
+
+  // Pre-fill from wizard context when creating via scoped list
+  useEffect(() => {
+    if (isEdit) return;
+    const subjectId = searchParams.get('subject_id');
+    const paramCategory = searchParams.get('category');
+    const paramYear = searchParams.get('year');
+    if (subjectId) setValue('subject_id', subjectId);
+    if (paramCategory === 'past_year' || paramCategory === 'practice') {
+      setCategory(paramCategory);
+    }
+    if (paramCategory === 'past_year' && paramYear) {
+      setYearVal(paramYear);
+    }
+  }, [isEdit, searchParams, setValue]);
 
   // Load existing question for edit
   useEffect(() => {
@@ -151,7 +168,7 @@ export default function AdminQuestionForm() {
       }
 
       toast.success(isEdit ? 'Question updated' : 'Question created');
-      navigate('/admin/questions');
+      navigate(returnTo);
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Failed to save question');
     } finally {
@@ -167,7 +184,7 @@ export default function AdminQuestionForm() {
     <div className="max-w-3xl space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <button onClick={() => navigate(-1)}
+        <button onClick={() => navigate(returnTo)}
           className="p-2 rounded-xl hover:bg-mint-light text-gray-400 hover:text-primary-600 transition-all">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7"/>

@@ -9,16 +9,16 @@ import { useForm } from 'react-hook-form';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../components/common/Toast';
 import { getDeviceId, validators } from '../../utils/helpers';
-import Input  from '../../components/common/Input';
+import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import authService from '../../services/authService';
 
 export default function LoginPage() {
-  const { login }      = useAuth();
-  const toast          = useToast();
-  const navigate       = useNavigate();
-  const location       = useLocation();
-  const from           = location.state?.from?.pathname || '/dashboard';
+  const { login } = useAuth();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from?.pathname || '/dashboard';
 
   const [loading, setLoading] = useState(false);
   const [unverifiedEmail, setUnverifiedEmail] = useState(null);
@@ -34,15 +34,17 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const user = await login({
-        email:       data.email,
-        password:    data.password,
+        email: data.email,
+        password: data.password,
         remember_me: data.remember_me,
-        device_id:   getDeviceId(),
+        device_id: getDeviceId(),
       });
       toast.success(`Welcome back, ${user.first_name}!`);
       // Route based on role
       if (user.role === 'admin' || user.role === 'super_admin') {
         navigate('/admin', { replace: true });
+      } else if (user.access_type === 'not_selected' && !user.has_active_subscription) {
+        navigate('/choose-access', { replace: true });
       } else {
         navigate(from, { replace: true });
       }
@@ -80,7 +82,7 @@ export default function LoginPage() {
       <div className="orb w-96 h-96 bg-sage-300/40 -top-20 -right-20" />
       <div className="orb w-64 h-64 bg-mint-dark/30 bottom-0 -left-16" />
       <div className="absolute inset-0 opacity-[0.04]"
-        style={{ backgroundImage:'radial-gradient(circle,#2D6A4F 1px,transparent 1px)', backgroundSize:'32px 32px' }} />
+        style={{ backgroundImage: 'radial-gradient(circle,#2D6A4F 1px,transparent 1px)', backgroundSize: '32px 32px' }} />
 
       <div className="relative z-10 w-full max-w-md">
         {/* Card */}
@@ -91,7 +93,7 @@ export default function LoginPage() {
             <Link to="/" className="flex items-center gap-2.5 mb-5">
               <div className="w-11 h-11 rounded-2xl bg-green-gradient flex items-center justify-center shadow-glow-green">
                 <svg viewBox="0 0 24 24" fill="white" className="w-6 h-6">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
                 </svg>
               </div>
               <div>
@@ -160,17 +162,17 @@ export default function LoginPage() {
             <Button type="submit" fullWidth size="lg" loading={loading}>
               Sign In
             </Button>
-            
+
             {unverifiedEmail && (
               <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-xl flex flex-col items-center">
                 <p className="text-sm text-orange-800 text-center mb-3">
                   Didn't receive the verification email?
                 </p>
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleResend} 
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResend}
                   loading={resending}
                   className="w-full max-w-[200px]"
                 >

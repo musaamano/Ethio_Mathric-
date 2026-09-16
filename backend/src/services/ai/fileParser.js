@@ -13,6 +13,7 @@ const XLSX = require('node-xlsx');
 const csv = require('csv-parser');
 const path = require('path');
 const { Readable } = require('stream');
+const logger = require('../../utils/logger');
 
 /**
  * Extract text from a file buffer based on mime type / extension.
@@ -62,8 +63,26 @@ async function extractFromPDF(buffer) {
 
     // result.text  — full concatenated text
     // result.total — page count
-    const text = result.text || '';
+    let text = result.text || '';
     const pages = result.total || 1;
+
+    const questionMatches = text.match(/Question\s+\d+/gi) || text.match(/(?:^|\s)(\d+)[.)]\s/gi) || [];
+    const questionCount = questionMatches.length;
+    logger.info(`[PDF Extraction] Raw text length: ${text.length} chars, Pages: ${pages}, Question markers found: ${questionCount}`);
+    logger.info(`[PDF Extraction] Raw preview: ${text.slice(0, 1200).replace(/\s+/g, ' ').trim()}`);
+    if (questionCount > 0) {
+      const firstQ = questionMatches[0];
+      const lastQ = questionMatches[questionMatches.length - 1];
+      logger.info(`[PDF Extraction] First question marker: ${firstQ}, Last question marker: ${lastQ}`);
+    }
+
+    // Normalize text for better parsing
+    text = normalizeText(text);
+
+    // DEBUG: Count question markers after normalization
+    const normalizedMatches = text.match(/Question\s+\d+/gi);
+    const normalizedCount = normalizedMatches ? normalizedMatches.length : 0;
+    logger.info(`[PDF Extraction] After normalization: Question markers: ${normalizedCount}`);
 
     return {
       text,
@@ -75,6 +94,26 @@ async function extractFromPDF(buffer) {
   } catch (err) {
     throw new Error(`PDF parsing failed: ${err.message}`);
   }
+}
+
+// ── Text normalization ───────────────────────────────────────
+function normalizeText(text) {
+  // Normalize line endings
+  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  // Remove excessive spaces (but preserve single spaces)
+  text = text.replace(/[ \t]+/g, ' ');
+
+  // Remove PDF formatting artifacts (Markdown-style * and **)
+  text = text.replace(/\*\*/g, '').replace(/\*/g, '');
+
+  // Repair words split across lines (e.g., "exam-\nple" -> "example")
+  text = text.replace(/([a-z])-\n([a-z])/gi, '$1$2');
+
+  // Preserve meaningful line breaks (after question numbers, options, etc.)
+  // Don't flatten everything into one line
+
+  return text;
 }
 
 // ── DOCX ──────────────────────────────────────────────────────

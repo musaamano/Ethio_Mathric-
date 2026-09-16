@@ -3,16 +3,16 @@
  * AI-powered question import workflow (preview/save flow)
  * PostgreSQL version
  */
-const { extractText }             = require('../services/ai/fileParser');
-const { parseQuestionsFromText, parseQuestionsFromRows, validateQuestion } = require('../services/ai/questionExtractor');
-const { detectDuplicates }        = require('../services/ai/duplicateDetector');
-const { generateExplanation }     = require('../services/ai/aiEnhancer');
+const { extractText } = require('../services/ai/fileParser');
+const { parseQuestionsFromText, parseQuestionsFromRows, validateQuestion, normalizeAIQuestions } = require('../services/ai/questionExtractor');
+const { detectDuplicates } = require('../services/ai/duplicateDetector');
+const { generateExplanation, extractQuestionsWithAI } = require('../services/ai/aiEnhancer');
 const { createLog, updateLog, getLogs } = require('../services/ai/importLogger');
-const { pool }                    = require('../config/db');
-const R                           = require('../utils/apiResponse');
-const logger                      = require('../utils/logger');
-const path                        = require('path');
-const fs                          = require('fs');
+const { pool } = require('../config/db');
+const R = require('../utils/apiResponse');
+const logger = require('../utils/logger');
+const path = require('path');
+const fs = require('fs');
 
 // ─────────────────────────────────────────────────────────────
 // STEP 1: UPLOAD & ANALYSE — returns questions for preview
@@ -70,7 +70,30 @@ const analyseFile = async (req, res, next) => {
     if (extracted.rows && extracted.rows.length > 0) {
       rawQuestions = parseQuestionsFromRows(extracted.rows);
     } else {
-      rawQuestions = parseQuestionsFromText(extracted.text);
+      try {
+        logger.info(`[Import] Using AI extraction for ${ext} file`);
+        const aiResult = await extractQuestionsWithAI(extracted.text, { batchSize: 30, maxRetries: 2 });
+
+        rawQuestions = normalizeAIQuestions(aiResult.questions, {
+          subject_id: subjectIdInt,
+          year: importYear,
+          is_free: true,
+        });
+
+        logger.info(`[Import] AI extraction complete: ${rawQuestions.length} questions extracted`);
+
+        if (aiResult.missing.length > 0) {
+          logger.warn(`[Import] Missing source questions: ${aiResult.missing.join(', ')}`);
+        }
+
+        if (aiResult.errors.length > 0) {
+          logger.error(`[Import] AI extraction errors: ${JSON.stringify(aiResult.errors)}`);
+        }
+      } catch (aiError) {
+        logger.error(`[Import] AI extraction failed: ${aiError.message}`);
+        await updateLog(importLogId, { status: 'failed', error_message: `AI extraction failed: ${aiError.message}`, completed_at: new Date() });
+        return R.badRequest(res, `AI extraction failed: ${aiError.message}`);
+      }
     }
 
     if (rawQuestions.length === 0) {
@@ -82,7 +105,7 @@ const analyseFile = async (req, res, next) => {
     rawQuestions = rawQuestions.map(q => ({
       ...q,
       subject_id: subjectIdInt,
-      year:       importYear ?? null,
+      year: importYear ?? null,
     }));
 
     const withDuplicates = await detectDuplicates(rawQuestions);
@@ -97,18 +120,25 @@ const analyseFile = async (req, res, next) => {
     );
 
     const summary = {
-      import_log_id:       importLogId,
-      file_name:           originalname,
-      file_type:           ext,
-      total_found:         withValidation.length,
-      valid:               withValidation.filter(q => q.errors.length === 0 && !q.duplicate).length,
-      with_errors:         withValidation.filter(q => q.errors.length > 0).length,
-      duplicates:          withValidation.filter(q => q.duplicate).length,
+      import_log_id: importLogId,
+      file_name: originalname,
+      file_type: ext,
+      found: withValidation.length,
+      total_found: withValidation.length,
+      valid: withValidation.filter(q => q.errors.length === 0 && !q.duplicate).length,
+      invalid: withValidation.filter(q => q.errors.length > 0).length,
+      with_errors: withValidation.filter(q => q.errors.length > 0).length,
+      duplicates: withValidation.filter(q => q.duplicate).length,
+      duplicate_count: withValidation.filter(q => q.duplicate).length,
       missing_explanation: withValidation.filter(q => !q.has_explanation).length,
-      // Report what was applied
-      subject_name:        subjectRows[0].name,
+      missing_explanation_count: withValidation.filter(q => !q.has_explanation).length,
+      missing_source_numbers: rawQuestions
+        .map(q => q.source_number)
+        .filter(n => Number.isInteger(n))
+        .sort((a, b) => a - b),
+      subject_name: subjectRows[0].name,
       question_category,
-      import_year:         importYear,
+      import_year: importYear,
     };
 
     await updateLog(importLogId, { total_found: summary.total_found });
@@ -134,8 +164,9 @@ const enhanceQuestions = async (req, res, next) => {
     const { questions } = req.body;
     if (!questions?.length) return R.badRequest(res, 'No questions provided');
 
+    // Removed artificial 50-question limit - process all questions
     const enhanced = await Promise.all(
-      questions.slice(0, 50).map(async (q) => {
+      questions.map(async (q) => {
         if (q.has_explanation) return q;
         const explanation = await generateExplanation(q);
         return { ...q, explanation, has_explanation: true };
@@ -186,6 +217,12 @@ const saveQuestions = async (req, res, next) => {
         }
       }
 
+      if (q.errors?.some(err => /missing explanation/i.test(err))) {
+        failed++;
+        errors.push({ question: q.question_text?.slice(0, 60), error: 'Missing explanation — review required before save' });
+        continue;
+      }
+
       try {
         await client.query('BEGIN');
 
@@ -196,13 +233,13 @@ const saveQuestions = async (req, res, next) => {
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
            RETURNING id`,
           [
-            q.subject_id      || null,
-            q.type            || 'multiple_choice',
+            q.subject_id || null,
+            q.type || 'multiple_choice',
             q.question_text,
-            q.difficulty      || 'medium',
+            q.difficulty || 'medium',
             q.exam_importance || 'medium',
-            q.year            ?? null,   // NULL = practice, integer = past_year
-            q.is_free         || false,
+            q.year ?? null,   // NULL = practice, integer = past_year
+            q.is_free || false,
             req.user.id,
           ]
         );
@@ -214,7 +251,7 @@ const saveQuestions = async (req, res, next) => {
           const vals = []; const params = []; let p = 1;
           for (let i = 0; i < validOpts.length; i++) {
             const opt = validOpts[i];
-            vals.push(`($${p},$${p+1},$${p+2},$${p+3},$${p+4})`);
+            vals.push(`($${p},$${p + 1},$${p + 2},$${p + 3},$${p + 4})`);
             params.push(qId, opt.label, opt.text, opt.label === q.correct_option, i);
             p += 5;
           }
@@ -233,21 +270,21 @@ const saveQuestions = async (req, res, next) => {
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
           [
             qId,
-            expl?.why_correct    || '',
-            expl?.why_a_wrong    || null,
-            expl?.why_b_wrong    || null,
-            expl?.why_c_wrong    || null,
-            expl?.why_d_wrong    || null,
-            expl?.memory_trick   || null,
+            expl?.why_correct || '',
+            expl?.why_a_wrong || null,
+            expl?.why_b_wrong || null,
+            expl?.why_c_wrong || null,
+            expl?.why_d_wrong || null,
+            expl?.memory_trick || null,
             expl?.common_mistake || null,
-            expl?.reference      || null,
+            expl?.reference || null,
           ]
         );
 
         await client.query('COMMIT');
         imported++;
       } catch (insertErr) {
-        await client.query('ROLLBACK').catch(() => {});
+        await client.query('ROLLBACK').catch(() => { });
         failed++;
         errors.push({ question: q.question_text?.slice(0, 60), error: insertErr.message });
         logger.warn(`Failed to import question: ${insertErr.message}`);
@@ -259,19 +296,19 @@ const saveQuestions = async (req, res, next) => {
 
   if (import_log_id) {
     await updateLog(import_log_id, {
-      total_imported:   imported,
-      total_errors:     failed,
-      total_skipped:    skipped,
+      total_imported: imported,
+      total_errors: failed,
+      total_skipped: skipped,
       total_duplicates: questions.filter(q => q.duplicate).length,
-      status:           'completed',
-      completed_at:     new Date(),
-      report_data:      JSON.stringify({ imported, failed, skipped, errors }),
-    }).catch(() => {});
+      status: 'completed',
+      completed_at: new Date(),
+      report_data: JSON.stringify({ imported, failed, skipped, errors }),
+    }).catch(() => { });
   }
 
   return R.success(res, {
     imported, failed, skipped,
-    total:  questions.length,
+    total: questions.length,
     errors: errors.slice(0, 20),
   }, `Import complete. ${imported} questions added successfully.`);
 };

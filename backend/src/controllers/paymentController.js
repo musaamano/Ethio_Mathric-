@@ -8,10 +8,10 @@
  * PostgreSQL version
  */
 const { pool, getClient } = require('../config/db');
-const R        = require('../utils/apiResponse');
+const R = require('../utils/apiResponse');
 const { v4: uuidv4 } = require('uuid');
-const logger   = require('../utils/logger');
-const crypto   = require('crypto');
+const logger = require('../utils/logger');
+const crypto = require('crypto');
 
 // ─────────────────────────────────────────────
 // CONSTANTS
@@ -51,7 +51,7 @@ function verifyWebhookSignature(rawBody, signature) {
     .digest('hex');
 
   const sigBuffer = Buffer.from(signature, 'utf8');
-  const expBuffer = Buffer.from(expected,  'utf8');
+  const expBuffer = Buffer.from(expected, 'utf8');
 
   if (sigBuffer.length !== expBuffer.length) {
     logger.warn('[Chapa Webhook] Signature length mismatch — potential spoofing attempt');
@@ -76,7 +76,7 @@ function verifyWebhookSignature(rawBody, signature) {
  */
 async function fetchWithTimeout(url, options = {}, timeoutMs = CHAPA_TIMEOUT_MS) {
   const controller = new AbortController();
-  const timer      = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, { ...options, signal: controller.signal });
     return response;
@@ -88,6 +88,26 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = CHAPA_TIMEOUT_MS)
   } finally {
     clearTimeout(timer);
   }
+}
+
+function redactChapaDiagnostic(value) {
+  if (Array.isArray(value)) return value.map(redactChapaDiagnostic);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [
+        key,
+        /secret|token|password|authorization|api[-_]?key/i.test(key)
+          ? '[REDACTED]'
+          : redactChapaDiagnostic(entry),
+      ])
+    );
+  }
+  if (typeof value === 'string') {
+    return value
+      .replace(/Bearer\s+[^\s"']+/gi, 'Bearer [REDACTED]')
+      .slice(0, 2000);
+  }
+  return value;
 }
 
 // ─────────────────────────────────────────────
@@ -102,18 +122,19 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = CHAPA_TIMEOUT_MS)
 // ─────────────────────────────────────────────
 
 async function activateSubscriptionTx(client, payment, plan, approvedBy = null) {
-  const startsAt  = new Date();
+  const startsAt = new Date();
   const expiresAt = new Date(startsAt.getTime() + plan.duration_days * 24 * 60 * 60 * 1000);
 
+  let paymentUpdate;
   if (approvedBy?.adminId) {
-    await client.query(
+    paymentUpdate = await client.query(
       `UPDATE payments
        SET status = 'completed', admin_approved_by = $1, admin_approved_at = NOW(), updated_at = NOW()
        WHERE id = $2`,
       [approvedBy.adminId, payment.id]
     );
   } else {
-    await client.query(
+    paymentUpdate = await client.query(
       `UPDATE payments
        SET status = 'completed', updated_at = NOW()
        WHERE id = $1`,
@@ -121,13 +142,19 @@ async function activateSubscriptionTx(client, payment, plan, approvedBy = null) 
     );
   }
 
-  await client.query(
+  const subscriptionUpdate = await client.query(
     `UPDATE subscriptions
      SET status = 'active', starts_at = $1, expires_at = $2, updated_at = NOW()
      WHERE id = $3`,
     [startsAt, expiresAt, payment.subscription_id]
   );
 
+  logger.info(
+    `[Payment] Activation updates: tx_ref=${payment.gateway_ref || 'unknown'} ` +
+    `user=${payment.user_id} payment_id=${payment.id} ` +
+    `payment_rows=${paymentUpdate.rowCount} subscription_id=${payment.subscription_id} ` +
+    `subscription_rows=${subscriptionUpdate.rowCount}`
+  );
   logger.info(
     `[Payment] Subscription activated: user=${payment.user_id} ` +
     `plan="${plan.name}" expires=${expiresAt.toISOString()} ` +
@@ -140,9 +167,9 @@ async function activateSubscriptionTx(client, payment, plan, approvedBy = null) 
 // ─────────────────────────────────────────────
 
 async function chapaInitialize({ amount, email, first_name, last_name, tx_ref }) {
-  const secretKey   = process.env.CHAPA_SECRET_KEY;
+  const secretKey = process.env.CHAPA_SECRET_KEY;
   const callbackUrl = process.env.CHAPA_CALLBACK_URL;
-  const returnUrl   = process.env.CHAPA_RETURN_URL;
+  const returnUrl = process.env.CHAPA_RETURN_URL;
 
   if (!secretKey) {
     logger.error('[Chapa] CHAPA_SECRET_KEY is not set');
@@ -150,16 +177,16 @@ async function chapaInitialize({ amount, email, first_name, last_name, tx_ref })
   }
 
   const payload = {
-    amount:       String(parseFloat(amount).toFixed(2)),
-    currency:     'ETB',
+    amount: String(parseFloat(amount).toFixed(2)),
+    currency: 'ETB',
     email,
     first_name,
     last_name,
     tx_ref,
     callback_url: callbackUrl || '',
-    return_url:   returnUrl   || '',
+    return_url: returnUrl || '',
     customization: {
-      title:       'Ethio Matric Academy',
+      title: 'Ethio Matric',
       description: 'Subscription payment',
     },
   };
@@ -169,30 +196,46 @@ async function chapaInitialize({ amount, email, first_name, last_name, tx_ref })
     response = await fetchWithTimeout(
       'https://api.chapa.co/v1/transaction/initialize',
       {
-        method:  'POST',
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${secretKey}`,
-          'Content-Type':  'application/json',
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
       }
     );
   } catch (networkErr) {
-    logger.error('[Chapa] Initialize error:', networkErr.message);
+    logger.error(
+      `[Chapa] Initialize error: tx_ref=${tx_ref || 'unknown'} ` +
+      `errorMessage=${networkErr.message} errorCode=${networkErr.code || 'unknown'}`
+    );
     if (networkErr.message.includes('timed out')) {
       throw new Error('Payment gateway timed out. Please try again.');
     }
     throw new Error('Could not reach the payment gateway. Please try again.');
   }
 
+  const responseText = await response.text();
   let body;
-  try { body = await response.json(); }
-  catch { throw new Error('Unexpected response from payment gateway. Please try again.'); }
+  try {
+    body = JSON.parse(responseText);
+  } catch (parseErr) {
+    logger.error(
+      `[Chapa] Initialize failed: httpStatus=${response.status} ` +
+      `tx_ref=${tx_ref || 'unknown'} ` +
+      `responseBody=${JSON.stringify(redactChapaDiagnostic(responseText))} ` +
+      `errorMessage=${parseErr.message}`
+    );
+    throw new Error('Unexpected response from payment gateway. Please try again.');
+  }
 
   if (!response.ok || body.status !== 'success') {
-    logger.error('[Chapa] Initialize failed:', JSON.stringify({
-      httpStatus: response.status, chapStatus: body.status, message: body.message,
-    }));
+    logger.error(
+      `[Chapa] Initialize failed: httpStatus=${response.status} ` +
+      `tx_ref=${tx_ref || 'unknown'} ` +
+      `responseBody=${JSON.stringify(redactChapaDiagnostic(body))} ` +
+      `errorMessage=${body.message || `Chapa returned status "${body.status || 'unknown'}"`}`
+    );
     const safeMsg = (body.message && typeof body.message === 'string')
       ? body.message.slice(0, 120)
       : 'Payment initialization failed. Please try again.';
@@ -325,7 +368,7 @@ const initiatePayment = async (req, res, next) => {
     if (activeSubs.length) {
       return res.status(409).json({
         success: false,
-        code:    'ALREADY_SUBSCRIBED',
+        code: 'ALREADY_SUBSCRIBED',
         message: 'You already have an active subscription. It will expire before you can purchase a new one.',
       });
     }
@@ -354,18 +397,18 @@ const initiatePayment = async (req, res, next) => {
       logger.info(`[Payment] Reusing pending tx_ref=${existing.gateway_ref} for user=${req.user.id}`);
       try {
         const { checkout_url } = await chapaInitialize({
-          amount:     plan.price_etb,
-          email:      req.user.email,
+          amount: plan.price_etb,
+          email: req.user.email,
           first_name: req.user.first_name,
-          last_name:  req.user.last_name,
-          tx_ref:     existing.gateway_ref,
+          last_name: req.user.last_name,
+          tx_ref: existing.gateway_ref,
         });
         return R.success(res, {
           checkout_url,
-          tx_ref:   existing.gateway_ref,
-          amount:   plan.price_etb,
+          tx_ref: existing.gateway_ref,
+          amount: plan.price_etb,
           currency: 'ETB',
-          gateway:  'chapa',
+          gateway: 'chapa',
           instructions: 'Complete payment on Chapa.',
         }, 'Payment initiated (existing session resumed)');
       } catch (reuseErr) {
@@ -394,21 +437,21 @@ const initiatePayment = async (req, res, next) => {
 
     // ── Call Chapa initialize ──────────────────────────────
     const { checkout_url } = await chapaInitialize({
-      amount:     plan.price_etb,
-      email:      req.user.email,
+      amount: plan.price_etb,
+      email: req.user.email,
       first_name: req.user.first_name,
-      last_name:  req.user.last_name,
-      tx_ref:     txRef,
+      last_name: req.user.last_name,
+      tx_ref: txRef,
     });
 
     logger.info(`[Payment] Chapa checkout created for user=${req.user.id} tx_ref=${txRef}`);
 
     return R.success(res, {
       checkout_url,
-      tx_ref:   txRef,
-      amount:   plan.price_etb,
+      tx_ref: txRef,
+      amount: plan.price_etb,
       currency: 'ETB',
-      gateway:  'chapa',
+      gateway: 'chapa',
       instructions: 'Complete payment on Chapa. You will be redirected back after payment.',
     }, 'Payment initiated');
 
@@ -456,8 +499,13 @@ const chapaCallback = async (req, res, next) => {
   try {
     // ── 0. HMAC signature verification ────────────────────
     const chapaSignature = req.headers['x-chapa-signature'] || '';
+    logger.info(
+      `[Chapa Webhook] Received request method=${req.method} path=${req.path} ` +
+      `signature_present=${Boolean(chapaSignature)}`
+    );
     try {
       verifyWebhookSignature(req.rawBody, chapaSignature);
+      logger.info('[Chapa Webhook] Signature verification passed');
     } catch (sigErr) {
       logger.warn(`[Chapa Webhook] Signature verification failed: ${sigErr.message}`);
       return res.status(401).json({ success: false, message: 'Invalid signature' });
@@ -475,13 +523,21 @@ const chapaCallback = async (req, res, next) => {
 
     // ── 2. Quick lookup — does this tx_ref exist at all? ───
     const { rows: existing } = await pool.query(
-      'SELECT id, status FROM payments WHERE gateway_ref = $1',
+      `SELECT id, user_id, subscription_id, plan_id, status
+       FROM payments
+       WHERE gateway_ref = $1`,
       [safeTxRef]
     );
     if (!existing.length) {
       logger.warn(`[Chapa Webhook] Unknown tx_ref=${safeTxRef}`);
       return ackOk('Unknown transaction — no action taken');
     }
+    logger.info(
+      `[Chapa Webhook] Payment record found: tx_ref=${safeTxRef} ` +
+      `payment_id=${existing[0].id} user=${existing[0].user_id} ` +
+      `subscription_id=${existing[0].subscription_id} plan_id=${existing[0].plan_id} ` +
+      `status=${existing[0].status}`
+    );
     // Already completed — early exit without acquiring a lock
     if (existing[0].status === 'completed') {
       logger.info(`[Chapa Webhook] Already completed tx_ref=${safeTxRef}`);
@@ -498,16 +554,22 @@ const chapaCallback = async (req, res, next) => {
     let verifiedTx;
     try {
       verifiedTx = await chapaVerify(safeTxRef);
+      logger.info(
+        `[Chapa Webhook] Chapa verification passed: tx_ref=${safeTxRef} ` +
+        `verified_tx_ref=${verifiedTx.tx_ref || 'unknown'} status=${verifiedTx.status || 'unknown'} ` +
+        `currency=${verifiedTx.currency || 'unknown'} amount=${verifiedTx.amount || 'unknown'} ` +
+        `gateway_id=${verifiedTx.id || 'unknown'}`
+      );
     } catch (verifyErr) {
       logger.error(`[Chapa Webhook] Verify failed tx_ref=${safeTxRef}: ${verifyErr.message}`);
       return ackOk('Verification temporarily unavailable — will retry');
     }
 
     // ── 4. Validate Chapa response fields ──────────────────
-    const chapaStatus   = (verifiedTx.status   || '').toLowerCase();
-    const chapaCurrency = (verifiedTx.currency  || '').toUpperCase();
-    const chapaAmount   = parseFloat(verifiedTx.amount || 0);
-    const chapaTxRef    = (verifiedTx.tx_ref    || '').trim();
+    const chapaStatus = (verifiedTx.status || '').toLowerCase();
+    const chapaCurrency = (verifiedTx.currency || '').toUpperCase();
+    const chapaAmount = parseFloat(verifiedTx.amount || 0);
+    const chapaTxRef = (verifiedTx.tx_ref || '').trim();
 
     if (chapaStatus !== 'success') {
       logger.warn(`[Chapa Webhook] Non-success status="${chapaStatus}" tx_ref=${safeTxRef}`);
@@ -567,6 +629,13 @@ const chapaCallback = async (req, res, next) => {
 
       const payment = claimedPayments[0];
 
+      logger.info(
+        `[Chapa Webhook] Plan identified: tx_ref=${safeTxRef} ` +
+        `plan_id=${payment.plan_id} plan="${payment.plan_name}" ` +
+        `duration_days=${payment.duration_days} user=${payment.user_id} ` +
+        `subscription_id=${payment.subscription_id}`
+      );
+
       // Re-check status inside the lock (defence-in-depth)
       if (payment.status !== 'pending') {
         await client.query('ROLLBACK');
@@ -576,7 +645,7 @@ const chapaCallback = async (req, res, next) => {
 
       // Amount check — compare against DB value (never trust client)
       const expectedAmount = parseFloat(payment.amount_etb || 0);
-      const TOLERANCE      = 0.01;
+      const TOLERANCE = 0.01;
       if (Math.abs(chapaAmount - expectedAmount) > TOLERANCE) {
         await client.query(
           "UPDATE payments SET status = 'failed', updated_at = NOW() WHERE id = $1",
@@ -589,7 +658,7 @@ const chapaCallback = async (req, res, next) => {
 
       // Build plan object for activateSubscriptionTx
       const plan = {
-        name:          payment.plan_name,
+        name: payment.plan_name,
         duration_days: payment.duration_days,
       };
 
@@ -607,7 +676,7 @@ const chapaCallback = async (req, res, next) => {
       return ackOk('Subscription activated successfully');
 
     } catch (txErr) {
-      await client.query('ROLLBACK').catch(() => {});
+      await client.query('ROLLBACK').catch(() => { });
       logger.error(`[Chapa Webhook] Transaction rolled back for tx_ref=${safeTxRef}: ${txErr.message}`);
       // Return 200 so Chapa retries — our data is safe (ROLLBACK happened)
       return ackOk('Internal error — will retry');
@@ -628,9 +697,9 @@ const getAllPayments = async (req, res, next) => {
   try {
     const { status, gateway, page = 1, limit = 20 } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
-    const where  = [], params = [];
+    const where = [], params = [];
 
-    if (status)  { params.push(status);  where.push(`p.status = $${params.length}`); }
+    if (status) { params.push(status); where.push(`p.status = $${params.length}`); }
     if (gateway) { params.push(gateway); where.push(`p.gateway = $${params.length}`); }
 
     const whereStr = where.length ? `WHERE ${where.join(' AND ')}` : '';
@@ -692,7 +761,7 @@ const approvePayment = async (req, res, next) => {
     return R.success(res, {}, 'Payment approved and subscription activated');
 
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
+    await client.query('ROLLBACK').catch(() => { });
     next(err);
   } finally {
     client.release();

@@ -11,87 +11,87 @@ const logger = require('../../utils/logger');
 // Each keyword must be specific enough not to fire for other subjects.
 // Biology keywords expanded to cover real Ethiopian Grade 12 exam patterns.
 const SUBJECT_KEYWORDS = {
-  physics:     ['newton', 'force', 'velocity', 'acceleration', 'momentum', 'wave', 'optics',
-                'electric', 'magnetic', 'kinetic energy', 'potential energy', 'frequency',
-                'wavelength', 'thermal', 'pressure', 'gravity', 'friction', 'refraction',
-                'reflection', 'lens', 'circuit', 'voltage', 'current', 'resistance',
-                'projectile', 'torque', 'capacitor', 'oscillation', 'amplitude',
-                'electromagnetic', 'nuclear', 'radioactive', 'fission', 'fusion'],
+  physics: ['newton', 'force', 'velocity', 'acceleration', 'momentum', 'wave', 'optics',
+    'electric', 'magnetic', 'kinetic energy', 'potential energy', 'frequency',
+    'wavelength', 'thermal', 'pressure', 'gravity', 'friction', 'refraction',
+    'reflection', 'lens', 'circuit', 'voltage', 'current', 'resistance',
+    'projectile', 'torque', 'capacitor', 'oscillation', 'amplitude',
+    'electromagnetic', 'nuclear', 'radioactive', 'fission', 'fusion'],
 
-  chemistry:   ['atom', 'molecule', 'element', 'compound', 'chemical reaction', 'acid', 'base',
-                'organic chemistry', 'inorganic', 'periodic table', 'chemical bond', 'electron',
-                'proton', 'neutron', 'mole', 'molecular formula', 'oxidation', 'reduction',
-                'titration', 'chemical equilibrium', 'ionic', 'covalent', 'molar mass',
-                'solubility', 'ph value', 'electrolysis', 'hydrocarbon', 'polymer', 'isomer',
-                'alkane', 'alkene', 'benzene', 'ester', 'buffer solution'],
+  chemistry: ['atom', 'molecule', 'element', 'compound', 'chemical reaction', 'acid', 'base',
+    'organic chemistry', 'inorganic', 'periodic table', 'chemical bond', 'electron',
+    'proton', 'neutron', 'mole', 'molecular formula', 'oxidation', 'reduction',
+    'titration', 'chemical equilibrium', 'ionic', 'covalent', 'molar mass',
+    'solubility', 'ph value', 'electrolysis', 'hydrocarbon', 'polymer', 'isomer',
+    'alkane', 'alkene', 'benzene', 'ester', 'buffer solution'],
 
-  biology:     ['cell', 'dna', 'rna', 'gene', 'protein', 'enzyme', 'organism',
-                'evolution', 'photosynthesis', 'cellular respiration', 'mitosis', 'meiosis',
-                'ecology', 'ecosystem', 'chromosome', 'nucleus', 'cell membrane',
-                'bacteria', 'virus', 'hormone', 'osmosis', 'diffusion', 'active transport',
-                'natural selection', 'darwin', 'genetic', 'allele', 'phenotype', 'genotype',
-                'dominant', 'recessive', 'heredity', 'mutation', 'nucleotide',
-                'ribosome', 'mitochondria', 'chloroplast', 'vacuole', 'lysosome',
-                'tissue', 'organ system', 'digestive', 'circulatory', 'respiratory',
-                'nervous system', 'excretory', 'reproductive', 'immune', 'endocrine',
-                'blood vessel', 'heart chamber', 'chamber', 'lung', 'kidney', 'liver', 'stomata',
-                'transpiration', 'food chain', 'food web', 'biodiversity', 'speciation',
-                'biome', 'nitrogen cycle', 'carbon cycle', 'water cycle',
-                'antibody', 'antigen', 'pathogen', 'vaccine', 'homeostasis',
-                'immunity', 'immunology',
-                'atp', 'glucose', 'amino acid', 'fatty acid', 'nucleic acid',
-                'population ecology', 'community', 'habitat', 'niche', 'predator',
-                'flowering plant', 'pea plant', 'gamete', 'fertilization', 'embryo', 'seed',
-                'blood type', 'hemoglobin', 'plasma', 'platelet', 'lymph',
-                'heterozygous', 'homozygous', 'monohybrid', 'dihybrid', 'mendel',
-                'biochemical', 'living organism', 'characteristic of living',
-                'density-dependent', 'density-independent', 'carrying capacity',
-                'coevolution', 'symbiosis', 'parasite', 'host'],
+  biology: ['cell', 'dna', 'rna', 'gene', 'protein', 'enzyme', 'organism',
+    'evolution', 'photosynthesis', 'cellular respiration', 'mitosis', 'meiosis',
+    'ecology', 'ecosystem', 'chromosome', 'nucleus', 'cell membrane',
+    'bacteria', 'virus', 'hormone', 'osmosis', 'diffusion', 'active transport',
+    'natural selection', 'darwin', 'genetic', 'allele', 'phenotype', 'genotype',
+    'dominant', 'recessive', 'heredity', 'mutation', 'nucleotide',
+    'ribosome', 'mitochondria', 'chloroplast', 'vacuole', 'lysosome',
+    'tissue', 'organ system', 'digestive', 'circulatory', 'respiratory',
+    'nervous system', 'excretory', 'reproductive', 'immune', 'endocrine',
+    'blood vessel', 'heart chamber', 'chamber', 'lung', 'kidney', 'liver', 'stomata',
+    'transpiration', 'food chain', 'food web', 'biodiversity', 'speciation',
+    'biome', 'nitrogen cycle', 'carbon cycle', 'water cycle',
+    'antibody', 'antigen', 'pathogen', 'vaccine', 'homeostasis',
+    'immunity', 'immunology',
+    'atp', 'glucose', 'amino acid', 'fatty acid', 'nucleic acid',
+    'population ecology', 'community', 'habitat', 'niche', 'predator',
+    'flowering plant', 'pea plant', 'gamete', 'fertilization', 'embryo', 'seed',
+    'blood type', 'hemoglobin', 'plasma', 'platelet', 'lymph',
+    'heterozygous', 'homozygous', 'monohybrid', 'dihybrid', 'mendel',
+    'biochemical', 'living organism', 'characteristic of living',
+    'density-dependent', 'density-independent', 'carrying capacity',
+    'coevolution', 'symbiosis', 'parasite', 'host'],
 
   mathematics: ['equation', 'function', 'derivative', 'integral', 'matrix', 'vector',
-                'trigonometry', 'calculus', 'algebra', 'geometry', 'probability',
-                'statistics', 'polynomial', 'arithmetic sequence', 'geometric series',
-                'logarithm', 'exponential', 'inequality', 'binomial theorem',
-                'quadratic', 'linear equation', 'simultaneous', 'determinant',
-                'permutation', 'combination', 'differentiation', 'integration',
-                'limit', 'continuity', 'parabola', 'ellipse', 'hyperbola'],
+    'trigonometry', 'calculus', 'algebra', 'geometry', 'probability',
+    'statistics', 'polynomial', 'arithmetic sequence', 'geometric series',
+    'logarithm', 'exponential', 'inequality', 'binomial theorem',
+    'quadratic', 'linear equation', 'simultaneous', 'determinant',
+    'permutation', 'combination', 'differentiation', 'integration',
+    'limit', 'continuity', 'parabola', 'ellipse', 'hyperbola'],
 
-  economics:   ['supply', 'demand', 'market', 'price level', 'inflation', 'gdp',
-                'fiscal policy', 'monetary policy', 'elasticity', 'market equilibrium',
-                'consumer', 'producer', 'international trade', 'government budget',
-                'investment', 'capital', 'labour market', 'aggregate demand',
-                'opportunity cost', 'marginal', 'monopoly', 'oligopoly', 'taxation',
-                'subsidy', 'foreign exchange', 'balance of payments'],
+  economics: ['supply', 'demand', 'market', 'price level', 'inflation', 'gdp',
+    'fiscal policy', 'monetary policy', 'elasticity', 'market equilibrium',
+    'consumer', 'producer', 'international trade', 'government budget',
+    'investment', 'capital', 'labour market', 'aggregate demand',
+    'opportunity cost', 'marginal', 'monopoly', 'oligopoly', 'taxation',
+    'subsidy', 'foreign exchange', 'balance of payments'],
 
-  history:     ['war', 'revolution', 'empire', 'dynasty', 'civilization', 'colonial',
-                'independence', 'treaty', 'century', 'ancient', 'medieval',
-                'ethiopia', 'african history', 'adwa', 'haile selassie', 'menelik',
-                'liberation movement', 'feudalism', 'imperialism', 'nationalism',
-                'world war', 'cold war', 'decolonization'],
+  history: ['war', 'revolution', 'empire', 'dynasty', 'civilization', 'colonial',
+    'independence', 'treaty', 'century', 'ancient', 'medieval',
+    'ethiopia', 'african history', 'adwa', 'haile selassie', 'menelik',
+    'liberation movement', 'feudalism', 'imperialism', 'nationalism',
+    'world war', 'cold war', 'decolonization'],
 
-  geography:   ['climate', 'weather pattern', 'continent', 'ocean', 'river basin',
-                'mountain range', 'population', 'urbanization', 'soil erosion',
-                'latitude', 'longitude', 'biome', 'habitat', 'annual rainfall',
-                'highland', 'plateau', 'vegetation', 'drainage basin', 'delta',
-                'savanna', 'tropical', 'temperate', 'tectonic', 'earthquake',
-                'migration', 'demographic'],
+  geography: ['climate', 'weather pattern', 'continent', 'ocean', 'river basin',
+    'mountain range', 'population', 'urbanization', 'soil erosion',
+    'latitude', 'longitude', 'biome', 'habitat', 'annual rainfall',
+    'highland', 'plateau', 'vegetation', 'drainage basin', 'delta',
+    'savanna', 'tropical', 'temperate', 'tectonic', 'earthquake',
+    'migration', 'demographic'],
 
-  english:     ['grammar', 'vocabulary', 'reading comprehension', 'verb tense', 'sentence',
-                'paragraph', 'essay writing', 'punctuation', 'synonym', 'antonym',
-                'idiom', 'phrase', 'passive voice', 'active voice', 'clause',
-                'conjunction', 'preposition', 'article', 'adjective', 'adverb',
-                'subject-verb agreement', 'reported speech', 'conditional'],
+  english: ['grammar', 'vocabulary', 'reading comprehension', 'verb tense', 'sentence',
+    'paragraph', 'essay writing', 'punctuation', 'synonym', 'antonym',
+    'idiom', 'phrase', 'passive voice', 'active voice', 'clause',
+    'conjunction', 'preposition', 'article', 'adjective', 'adverb',
+    'subject-verb agreement', 'reported speech', 'conditional'],
 
   citizenship: ['constitution', 'democracy', 'civil rights', 'government structure',
-                'parliament', 'citizenship', 'rule of law', 'public policy',
-                'federal system', 'regional government', 'election process',
-                'social justice', 'sovereignty', 'human rights', 'civic duty',
-                'separation of powers', 'judicial'],
+    'parliament', 'citizenship', 'rule of law', 'public policy',
+    'federal system', 'regional government', 'election process',
+    'social justice', 'sovereignty', 'human rights', 'civic duty',
+    'separation of powers', 'judicial'],
 
-  ict:         ['computer', 'software', 'hardware', 'internet', 'network',
-                'database', 'algorithm', 'program', 'binary code', 'processor',
-                'storage memory', 'spreadsheet', 'operating system', 'programming',
-                'data structure', 'encryption', 'cybersecurity', 'ip address'],
+  ict: ['computer', 'software', 'hardware', 'internet', 'network',
+    'database', 'algorithm', 'program', 'binary code', 'processor',
+    'storage memory', 'spreadsheet', 'operating system', 'programming',
+    'data structure', 'encryption', 'cybersecurity', 'ip address'],
 };
 
 function detectSubject(text) {
@@ -106,8 +106,8 @@ function detectSubject(text) {
 
 function detectDifficulty(text) {
   const lower = text.toLowerCase();
-  const hard  = ['calculate', 'derive', 'prove', 'evaluate', 'analyze', 'compare', 'synthesize', 'determine', 'justify'];
-  const easy  = ['define', 'what is', 'name', 'list', 'state', 'identify', 'recall', 'which of the following is'];
+  const hard = ['calculate', 'derive', 'prove', 'evaluate', 'analyze', 'compare', 'synthesize', 'determine', 'justify'];
+  const easy = ['define', 'what is', 'name', 'list', 'state', 'identify', 'recall', 'which of the following is'];
   if (hard.some(w => lower.includes(w))) return 'hard';
   if (easy.some(w => lower.includes(w))) return 'easy';
   return 'medium';
@@ -116,19 +116,19 @@ function detectDifficulty(text) {
 function detectExamImportance(text) {
   const lower = text.toLowerCase();
   if (lower.includes('very important') || lower.includes('critical')) return 'very_high';
-  if (lower.includes('important') || lower.includes('key'))           return 'high';
-  if (lower.includes('basic') || lower.includes('simple'))            return 'low';
+  if (lower.includes('important') || lower.includes('key')) return 'high';
+  if (lower.includes('basic') || lower.includes('simple')) return 'low';
   return 'medium';
 }
 
 function detectLearningObjective(text) {
   const lower = text.toLowerCase();
-  if (lower.includes('define') || lower.includes('what is'))   return 'Knowledge';
+  if (lower.includes('define') || lower.includes('what is')) return 'Knowledge';
   if (lower.includes('explain') || lower.includes('describe')) return 'Comprehension';
-  if (lower.includes('calculate') || lower.includes('solve'))  return 'Application';
-  if (lower.includes('analyze') || lower.includes('compare'))  return 'Analysis';
+  if (lower.includes('calculate') || lower.includes('solve')) return 'Application';
+  if (lower.includes('analyze') || lower.includes('compare')) return 'Analysis';
   if (lower.includes('evaluate') || lower.includes('justify')) return 'Evaluation';
-  if (lower.includes('design') || lower.includes('create'))    return 'Synthesis';
+  if (lower.includes('design') || lower.includes('create')) return 'Synthesis';
   return null;
 }
 
@@ -142,21 +142,40 @@ function detectLearningObjective(text) {
 // ─────────────────────────────────────────────────────────────
 function parseQuestionsFromText(text) {
   const questions = [];
-  const seen      = new Set();
+  const seen = new Set();
+
+  // DEBUG: Log input text info
+  logger.info(`[QuestionExtractor] Input text length: ${text.length} chars`);
 
   // Normalise line endings once
   const normalised = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
   // ── Split into question blocks ──────────────────────────
-  // A new block starts when a line begins with a number followed by . or )
+  // A new block starts when a line begins with:
+  // - "Question 1:" (your PDF format)
+  // - "Question 1" (without colon)
+  // - "1." or "1)" (traditional format)
+  // - "Question 1" followed by newline
   // This is O(n) and avoids multi-line backtracking entirely.
-  const lines  = normalised.split('\n');
+  const lines = normalised.split('\n');
   const blocks = []; // each block = array of lines belonging to one question
-  let current  = null;
+  let current = null;
 
   for (const line of lines) {
-    if (/^\s*\d+[.)]\s+\S/.test(line)) {
-      // New numbered item — start a new block
+    const trimmed = line.trim();
+
+    // Match: "Question 1:", "Question 1", "1.", "1)", "QUESTION 1:", etc.
+    // Also match "Question 1" on its own line (even without colon)
+    // Very permissive: any line starting with "Question" followed by a number
+    const isQuestionStart =
+      /^Question\s+\d+(?=\s|[:.)-]|$)/i.test(trimmed) ||
+      /^(?:Question\s+)?\d+(?=\s|[:.)-]|$)/i.test(trimmed) ||
+      /^\d+[.)]\s/i.test(trimmed) ||
+      /^\d+\.\s/i.test(trimmed) ||
+      /^\d+\)\s/i.test(trimmed);
+
+    if (isQuestionStart) {
+      // New question — start a new block
       if (current !== null) blocks.push(current);
       current = [line];
     } else if (current !== null) {
@@ -165,13 +184,28 @@ function parseQuestionsFromText(text) {
   }
   if (current !== null) blocks.push(current);
 
+  // DEBUG: Log block detection
+  logger.info(`[QuestionExtractor] Detected ${blocks.length} question blocks`);
+
+  // DEBUG: Extract question numbers from blocks
+  const detectedNumbers = [];
+  for (const blockLines of blocks) {
+    const firstLine = blockLines[0] || '';
+    const match = firstLine.match(/(?:Question\s+)?(\d+)/i);
+    if (match) detectedNumbers.push(parseInt(match[1]));
+  }
+  logger.info(`[QuestionExtractor] Detected question numbers: ${detectedNumbers.join(', ')}`);
+  if (detectedNumbers.length > 0) {
+    logger.info(`[QuestionExtractor] First: ${detectedNumbers[0]}, Last: ${detectedNumbers[detectedNumbers.length - 1]}`);
+  }
+
   // ── Process each block ──────────────────────────────────
   for (const blockLines of blocks) {
     const block = blockLines.join('\n');
 
-    // Extract question text (first line, strip leading number)
+    // Extract question text (first line, strip "Question N:" or "N." prefix)
     const firstLine = blockLines[0] || '';
-    const qTxt = firstLine.replace(/^\s*\d+[.)]\s*/, '').trim();
+    const qTxt = firstLine.replace(/^\s*(?:Question\s+)?\d+[.)]?\s*:?\s*/i, '').trim();
     if (!qTxt || qTxt.length < 5) continue;
     const key = qTxt.slice(0, 60);
     if (seen.has(key)) continue;
@@ -201,7 +235,7 @@ function parseQuestionsFromText(text) {
         let im;
         while ((im = inlineRe.exec(ln)) !== null) {
           const label = im[1].toUpperCase();
-          const text  = im[2].trim();
+          const text = im[2].trim();
           if (text && !optMap[label]) optMap[label] = text;
         }
       }
@@ -214,11 +248,26 @@ function parseQuestionsFromText(text) {
       if (am) { answer = am[1].toUpperCase(); break; }
     }
 
-    // Find explanation line (optional) — "Explanation: ..." / "Exp: ..."
+    // Find explanation (optional) — "Explanation:" followed by text on same or subsequent lines
+    // Continue capturing until the next question boundary or end of block
     let explanationText = null;
+    let explanationStarted = false;
+    const explanationLines = [];
     for (const ln of blockLines) {
-      const em = ln.match(/^\s*(?:Explanation|Exp(?:lanation)?|Why)[:\s]+(.+)/i);
-      if (em) { explanationText = em[1].trim(); break; }
+      if (/^\s*(?:Explanation|Exp(?:lanation)?|Why)[:\s]*$/i.test(ln)) {
+        explanationStarted = true;
+        continue;
+      }
+      if (explanationStarted) {
+        // Stop if we hit another question marker
+        if (/^\s*(?:Question\s+)?\d+[.)]?\s*:?/i.test(ln)) break;
+        // Stop if we hit "Correct Answer:" (some formats have this after explanation)
+        if (/^\s*(?:Correct\s+Answer|Answer)[:\s]/i.test(ln)) break;
+        if (ln.trim()) explanationLines.push(ln.trim());
+      }
+    }
+    if (explanationLines.length > 0) {
+      explanationText = explanationLines.join(' ');
     }
 
     // Pattern 3 fallback: all on one line (question + A B C D Answer all together)
@@ -248,25 +297,45 @@ function parseQuestionsFromText(text) {
         if (seen.has(key)) continue;
         seen.add(key);
         questions.push({
-          question_text:    qTxt,
-          type:             'true_false',
-          options:          [{ label: 'A', text: 'True' }, { label: 'B', text: 'False' }],
-          correct_option:   tfMatch[1].toLowerCase() === 'true' ? 'A' : 'B',
-          difficulty:       detectDifficulty(qTxt),
+          question_text: qTxt,
+          type: 'true_false',
+          options: [{ label: 'A', text: 'True' }, { label: 'B', text: 'False' }],
+          correct_option: tfMatch[1].toLowerCase() === 'true' ? 'A' : 'B',
+          difficulty: detectDifficulty(qTxt),
           detected_subject: detectSubject(qTxt),
-          has_explanation:  !!explanationText,
-          explanation:      explanationText ? { why_correct: explanationText } : undefined,
-          is_free:          true,
-          status:           'pending',
-          errors:           [],
+          has_explanation: !!explanationText,
+          explanation: explanationText ? { why_correct: explanationText } : undefined,
+          is_free: true,
+          status: 'pending',
+          errors: [],
         });
         continue;
       }
     }
 
-    // Only emit if we have at least 2 options (otherwise it's garbled text)
-    const optCount = ['A','B','C','D'].filter(l => optMap[l]).length;
-    if (optCount < 2) continue;
+    const optCount = ['A', 'B', 'C', 'D'].filter(l => optMap[l]).length;
+    if (optCount < 2) {
+      seen.add(key);
+      questions.push({
+        source_number: (() => {
+          const match = firstLine.match(/\b(\d+)\b/);
+          return match ? parseInt(match[1], 10) : null;
+        })(),
+        question_text: stripQuestionNumbering(qTxt || ''),
+        type: 'multiple_choice',
+        options: [
+          { label: 'A', text: (optMap.A || '').trim() },
+          { label: 'B', text: (optMap.B || '').trim() },
+          { label: 'C', text: (optMap.C || '').trim() },
+          { label: 'D', text: (optMap.D || '').trim() },
+        ],
+        correct_option: answer?.trim()?.toUpperCase() || null,
+        difficulty: detectDifficulty(qTxt || ''),
+        status: 'invalid',
+        errors: ['Incomplete question detected; missing options or invalid structure'],
+      });
+      continue;
+    }
 
     seen.add(key);
     const q = makeQuestion({
@@ -285,6 +354,13 @@ function parseQuestionsFromText(text) {
     }
 
     questions.push(q);
+  }
+
+  // DEBUG: Log final parsed question count
+  logger.info(`[QuestionExtractor] Final parsed questions: ${questions.length}`);
+  const parsedNumbers = questions.map((q, i) => i + 1);
+  if (parsedNumbers.length > 0) {
+    logger.info(`[QuestionExtractor] Parsed question numbers (1-indexed): ${parsedNumbers.join(', ')}`);
   }
 
   // ── Fallback: unnumbered question blocks ────────────────
@@ -343,7 +419,7 @@ function parseQuestionsFromText(text) {
         if (am) { answer = am[1].toUpperCase(); break; }
       }
 
-      const optCount = ['A','B','C','D'].filter(l => optMap[l]).length;
+      const optCount = ['A', 'B', 'C', 'D'].filter(l => optMap[l]).length;
       if (optCount < 2) continue;
 
       seen.add(key);
@@ -369,45 +445,45 @@ function parseQuestionsFromRows(rows) {
   return rows
     .filter(row => !!(row.question_text || row.question || row.Question || row.QUESTION))
     .map((row, idx) => {
-      const qTxt   = (row.question_text || row.question || row.Question || row.QUESTION || '').toString().trim();
-      const optA   = (row.option_A || row.option_a || row.A || row['Option A'] || row.optionA || '').toString().trim();
-      const optB   = (row.option_B || row.option_b || row.B || row['Option B'] || row.optionB || '').toString().trim();
-      const optC   = (row.option_C || row.option_c || row.C || row['Option C'] || row.optionC || '').toString().trim();
-      const optD   = (row.option_D || row.option_d || row.D || row['Option D'] || row.optionD || '').toString().trim();
+      const qTxt = (row.question_text || row.question || row.Question || row.QUESTION || '').toString().trim();
+      const optA = (row.option_A || row.option_a || row.A || row['Option A'] || row.optionA || '').toString().trim();
+      const optB = (row.option_B || row.option_b || row.B || row['Option B'] || row.optionB || '').toString().trim();
+      const optC = (row.option_C || row.option_c || row.C || row['Option C'] || row.optionC || '').toString().trim();
+      const optD = (row.option_D || row.option_d || row.D || row['Option D'] || row.optionD || '').toString().trim();
       const answer = (row.correct_option || row.answer || row.Answer || row.correct || row.Correct || '').toString().trim().toUpperCase();
-      const diff   = (row.difficulty || row.Difficulty || 'medium').toString().toLowerCase();
+      const diff = (row.difficulty || row.Difficulty || 'medium').toString().toLowerCase();
       const isFree = row.is_free === '1' || row.is_free === 'true' || row.is_free === true || row.is_free === 1;
       const premium = row.premium === '1' || row.premium === 'true';
 
-      const whyCorrect  = (row.why_correct || row.explanation || row.Explanation || '').toString().trim();
+      const whyCorrect = (row.why_correct || row.explanation || row.Explanation || '').toString().trim();
       const memoryTrick = (row.memory_trick || row.mnemonic || '').toString().trim();
-      const commonMist  = (row.common_mistake || '').toString().trim();
+      const commonMist = (row.common_mistake || '').toString().trim();
       const learningObj = (row.learning_objective || row.objective || '').toString().trim() || detectLearningObjective(qTxt);
 
       const q = {
-        number:           idx + 1,
-        question_text:    qTxt,
-        type:             normaliseType(row.type || row.Type || 'multiple_choice'),
+        number: idx + 1,
+        question_text: qTxt,
+        type: normaliseType(row.type || row.Type || 'multiple_choice'),
         options: [
           { label: 'A', text: optA },
           { label: 'B', text: optB },
           { label: 'C', text: optC },
           { label: 'D', text: optD },
         ],
-        correct_option:     answer,
-        difficulty:         ['easy','medium','hard'].includes(diff) ? diff : 'medium',
-        subject_id:         row.subject_id ? parseInt(row.subject_id) : null,
-        is_free:            premium ? false : isFree,
-        exam_importance:    premium ? 'medium' : 'medium',
+        correct_option: answer,
+        difficulty: ['easy', 'medium', 'hard'].includes(diff) ? diff : 'medium',
+        subject_id: row.subject_id ? parseInt(row.subject_id) : null,
+        is_free: premium ? false : isFree,
+        exam_importance: premium ? 'medium' : 'medium',
         learning_objective: learningObj || null,
         explanation: {
-          why_correct:    whyCorrect,
-          memory_trick:   memoryTrick,
+          why_correct: whyCorrect,
+          memory_trick: memoryTrick,
           common_mistake: commonMist,
         },
-        detected_subject:  detectSubject(qTxt),
-        has_explanation:   !!(whyCorrect),
-        status:            'pending',
+        detected_subject: detectSubject(qTxt),
+        has_explanation: !!(whyCorrect),
+        status: 'pending',
       };
 
       q.errors = validateQuestion(q);
@@ -420,32 +496,42 @@ function parseQuestionsFromRows(rows) {
 // ─────────────────────────────────────────────────────────────
 function makeQuestion({ qTxt, optA, optB, optC, optD, answer }) {
   return {
-    question_text:     qTxt?.trim(),
-    type:              'multiple_choice',
+    question_text: stripQuestionNumbering(qTxt?.trim() || ''),
+    type: 'multiple_choice',
     options: [
       { label: 'A', text: (optA || '').trim() },
       { label: 'B', text: (optB || '').trim() },
       { label: 'C', text: (optC || '').trim() },
       { label: 'D', text: (optD || '').trim() },
     ],
-    correct_option:    answer?.trim()?.toUpperCase() || null,
-    difficulty:        detectDifficulty(qTxt || ''),
-    detected_subject:  detectSubject(qTxt || ''),
+    correct_option: answer?.trim()?.toUpperCase() || null,
+    difficulty: detectDifficulty(stripQuestionNumbering(qTxt || '')),
+    detected_subject: detectSubject(qTxt || ''),
     learning_objective: detectLearningObjective(qTxt || ''),
-    has_explanation:   false,
-    is_free:           true,
-    status:            'pending',
-    errors:            [],
+    has_explanation: false,
+    is_free: true,
+    status: 'pending',
+    errors: [],
   };
 }
 
 function normaliseType(t) {
   const lower = (t || '').toString().toLowerCase().replace(/[\s-]/g, '_');
   if (lower.includes('true') || lower.includes('false') || lower === 'tf') return 'true_false';
-  if (lower.includes('match'))                                               return 'matching';
-  if (lower.includes('image'))                                               return 'image_based';
+  if (lower.includes('match')) return 'matching';
+  if (lower.includes('image')) return 'image_based';
   if (lower.includes('short') || lower.includes('fill') || lower.includes('blank') || lower.includes('essay')) return 'fill_blank';
   return 'multiple_choice';
+}
+
+function stripQuestionNumbering(text) {
+  if (!text) return '';
+  let cleaned = String(text).trim();
+  cleaned = cleaned.replace(/^(?:Question|QUESTION)\s*[:\-]?\s*\d+\s*[:\-]?\s*/i, '');
+  cleaned = cleaned.replace(/^\d+[.)]\s*/i, '');
+  cleaned = cleaned.replace(/^\(\s*\d+\s*\)\s*/i, '');
+  cleaned = cleaned.replace(/^\s*[-•*]\s*/i, '');
+  return cleaned.trim();
 }
 
 function validateQuestion(q) {
@@ -453,11 +539,34 @@ function validateQuestion(q) {
   if (!q.question_text || q.question_text.length < 5) errors.push('Question text is too short or missing');
   if (!q.subject_id) errors.push('No subject assigned — select a subject or include subject_id in your file');
   if (q.type === 'multiple_choice') {
-    const validOpts = (q.options || []).filter(o => o.text && o.text.trim().length > 0);
-    if (validOpts.length < 2) errors.push(`Only ${validOpts.length}/4 options provided`);
-    if (!q.correct_option)    errors.push('No correct answer specified');
-    if (q.correct_option && !['A','B','C','D'].includes(q.correct_option.toUpperCase())) {
+    const optionMap = {};
+    (q.options || []).forEach((option) => {
+      if (!option || !option.label) return;
+      optionMap[option.label.toUpperCase()] = (option.text || '').trim();
+    });
+
+    ['A', 'B', 'C', 'D'].forEach((label) => {
+      if (!optionMap[label]) errors.push(`Missing option ${label}`);
+    });
+
+    if (!q.correct_option) {
+      errors.push('No correct answer specified');
+    } else if (!['A', 'B', 'C', 'D'].includes(q.correct_option.toUpperCase())) {
       errors.push(`Invalid correct answer: "${q.correct_option}"`);
+    } else if (!optionMap[q.correct_option.toUpperCase()]) {
+      errors.push(`Correct answer "${q.correct_option.toUpperCase()}" is missing from the options`);
+    }
+
+    const hasMeaningfulExplanation = !!(
+      q.has_explanation &&
+      q.explanation &&
+      (
+        (typeof q.explanation === 'string' && q.explanation.trim().length > 0) ||
+        (typeof q.explanation === 'object' && Object.values(q.explanation).some(v => typeof v === 'string' && v.trim().length > 0))
+      )
+    );
+    if (!hasMeaningfulExplanation) {
+      errors.push('Explanation not found in source');
     }
   }
   return errors;
@@ -466,16 +575,97 @@ function validateQuestion(q) {
 function generateBasicExplanation(question) {
   const correct = question.options?.find(o => o.label === question.correct_option);
   return {
-    why_correct:    correct
+    why_correct: correct
       ? `The correct answer is ${question.correct_option}: "${correct.text}". Review this concept carefully in your textbook.`
       : 'Review your textbook for the correct explanation.',
-    memory_trick:   'Create a mnemonic to remember this concept.',
+    memory_trick: 'Create a mnemonic to remember this concept.',
     common_mistake: 'Students often confuse this with a similar concept. Read each option carefully.',
-    why_a_wrong:    question.correct_option !== 'A' ? 'Option A is incorrect for this question.' : null,
-    why_b_wrong:    question.correct_option !== 'B' ? 'Option B is incorrect for this question.' : null,
-    why_c_wrong:    question.correct_option !== 'C' ? 'Option C is incorrect for this question.' : null,
-    why_d_wrong:    question.correct_option !== 'D' ? 'Option D is incorrect for this question.' : null,
+    why_a_wrong: question.correct_option !== 'A' ? 'Option A is incorrect for this question.' : null,
+    why_b_wrong: question.correct_option !== 'B' ? 'Option B is incorrect for this question.' : null,
+    why_c_wrong: question.correct_option !== 'C' ? 'Option C is incorrect for this question.' : null,
+    why_d_wrong: question.correct_option !== 'D' ? 'Option D is incorrect for this question.' : null,
   };
+}
+
+/**
+ * Normalize AI-extracted questions to the format expected by the save pipeline
+ * @param {Array} aiQuestions - Questions from extractQuestionsWithAI
+ * @param {Object} metadata - { subject_id, year, is_free }
+ * @returns {Array} Normalized question objects
+ */
+function normalizeAIExplanation(explanation, hasExplanation = false) {
+  if (!hasExplanation || !explanation) return null;
+
+  if (typeof explanation === 'string') {
+    return explanation.trim() ? explanation.trim() : null;
+  }
+
+  if (typeof explanation === 'object') {
+    const normalized = {
+      why_correct: explanation.why_correct || null,
+      why_a_wrong: explanation.why_a_wrong || null,
+      why_b_wrong: explanation.why_b_wrong || null,
+      why_c_wrong: explanation.why_c_wrong || null,
+      why_d_wrong: explanation.why_d_wrong || null,
+      memory_trick: explanation.memory_trick || null,
+      common_mistake: explanation.common_mistake || null,
+      reference: explanation.reference || null,
+    };
+
+    const hasText = Object.values(normalized).some(v => typeof v === 'string' && v.trim().length > 0);
+    return hasText ? normalized : null;
+  }
+
+  return null;
+}
+
+function normalizeAIQuestions(aiQuestions, metadata = {}) {
+  const { subject_id, year, is_free = true } = metadata;
+
+  logger.info(`[QuestionExtractor] Normalizing ${aiQuestions.length} AI-extracted questions`);
+
+  return aiQuestions.map((q, index) => {
+    const rawOptions = Array.isArray(q.options) ? q.options : [];
+    const normalized = {
+      source_number: Number.isInteger(q.source_number) ? q.source_number : index + 1,
+      question_text: (q.question_text || '').toString().trim(),
+      type: normaliseType(q.type || 'multiple_choice'),
+      options: ['A', 'B', 'C', 'D'].map((label) => {
+        const option = rawOptions.find(o => (o?.label || '').toString().trim().toUpperCase() === label) || rawOptions[('ABCD'.indexOf(label))];
+        return { label, text: (option?.text || '').toString().trim() };
+      }),
+      correct_option: (q.correct_option || '').toString().trim().toUpperCase() || null,
+      difficulty: normalizeDifficulty(q.difficulty, q.question_text),
+      exam_importance: normalizeExamImportance(q.exam_importance),
+      subject_id: subject_id || null,
+      year: year ?? null,
+      is_free: typeof q.is_free === 'boolean' ? q.is_free : is_free,
+      question_text: stripQuestionNumbering((q.question_text || '').toString().trim()),
+      explanation: normalizeAIExplanation(q.explanation, !!q.has_explanation),
+      has_explanation: !!(q.has_explanation || normalizeAIExplanation(q.explanation, !!q.has_explanation)),
+      status: 'pending',
+      errors: [],
+    };
+
+    normalized.errors = validateQuestion(normalized);
+    normalized.status = normalized.errors.length ? 'invalid' : 'pending';
+
+    return normalized;
+  });
+}
+
+function normalizeDifficulty(value, questionText = '') {
+  const normalized = (value || '').toString().trim().toLowerCase().replace(/[-\s]+/g, '_');
+  return ['easy', 'medium', 'hard'].includes(normalized)
+    ? normalized
+    : detectDifficulty(questionText);
+}
+
+function normalizeExamImportance(value) {
+  const normalized = (value || '').toString().trim().toLowerCase().replace(/[-\s]+/g, '_');
+  return ['low', 'medium', 'high', 'very_high'].includes(normalized)
+    ? normalized
+    : 'medium';
 }
 
 module.exports = {
@@ -486,4 +676,5 @@ module.exports = {
   detectSubject,
   detectDifficulty,
   detectLearningObjective,
+  normalizeAIQuestions,
 };

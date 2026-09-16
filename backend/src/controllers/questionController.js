@@ -4,10 +4,10 @@
  * PostgreSQL version
  */
 const { pool, getClient } = require('../config/db');
-const R    = require('../utils/apiResponse');
+const R = require('../utils/apiResponse');
 const XLSX = require('xlsx');
 const path = require('path');
-const fs   = require('fs');
+const fs = require('fs');
 
 // ─────────────────────────────────────────────
 // HELPER: build $1,$2,... placeholders
@@ -35,6 +35,80 @@ async function attachOptions(questions) {
   questions.forEach(q => { q.options = optsMap[q.id] || []; });
 }
 
+const FREE_SUBJECT_DAILY_LIMIT = 20;
+const VALID_SUBMIT_OPTIONS = new Set(['A', 'B', 'C', 'D']);
+const VALID_OPTIONS = new Set(['A', 'B', 'C', 'D']);
+
+function parsePositiveInteger(value) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function computeSubmittedAnswerCount(answers) {
+  if (!Array.isArray(answers)) return 0;
+
+  const seen = new Set();
+  let count = 0;
+
+  for (const ans of answers) {
+    const qId = parseInt(ans?.question_id);
+    const selected = ans?.selected_option
+      ? String(ans.selected_option).trim().toUpperCase()
+      : null;
+
+    if (!qId || Number.isNaN(qId) || !selected || !VALID_SUBMIT_OPTIONS.has(selected)) continue;
+    if (seen.has(qId)) continue;
+
+    seen.add(qId);
+    count += 1;
+  }
+
+  return count;
+}
+
+function parseJsonField(value, fallback = null) {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value !== 'string') return value;
+
+  const trimmed = value.trim();
+  if (!trimmed) return fallback;
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return fallback;
+  }
+}
+
+function getDailyLimitStatus(used, limit = FREE_SUBJECT_DAILY_LIMIT, premium = false) {
+  const normalizedUsed = Math.max(0, parseInt(used) || 0);
+  const normalizedLimit = Math.max(1, parseInt(limit) || FREE_SUBJECT_DAILY_LIMIT);
+  const reached = normalizedUsed >= normalizedLimit;
+
+  return {
+    used: normalizedUsed,
+    limit: normalizedLimit,
+    reached,
+    remaining: Math.max(0, normalizedLimit - normalizedUsed),
+    premium: !!premium,
+  };
+}
+
+async function fetchFreeSubjectUsage(userId, subjectId, db = pool) {
+  const subjectIdInt = parseInt(subjectId);
+  if (!userId || !subjectIdInt || Number.isNaN(subjectIdInt)) return 0;
+
+  const { rows } = await db.query(
+    `SELECT question_count
+     FROM free_subject_daily_usage
+     WHERE user_id = $1 AND subject_id = $2 AND usage_date = CURRENT_DATE
+     FOR UPDATE`,
+    [userId, subjectIdInt]
+  );
+
+  return parseInt(rows[0]?.question_count || 0, 10);
+}
+
 // ─────────────────────────────────────────────
 // GET QUESTIONS (admin — with filters & pagination)
 // ─────────────────────────────────────────────
@@ -46,12 +120,12 @@ const getQuestions = async (req, res, next) => {
       category, year,
     } = req.query;
 
-    const where  = ['q.is_active = TRUE'];
+    const where = ['q.is_active = TRUE'];
     const params = [];
 
-    if (subject_id) { params.push(subject_id);     where.push(`q.subject_id = $${params.length}`); }
-    if (difficulty) { params.push(difficulty);     where.push(`q.difficulty = $${params.length}`); }
-    if (type)       { params.push(type);           where.push(`q.type = $${params.length}`); }
+    if (subject_id) { params.push(subject_id); where.push(`q.subject_id = $${params.length}`); }
+    if (difficulty) { params.push(difficulty); where.push(`q.difficulty = $${params.length}`); }
+    if (type) { params.push(type); where.push(`q.type = $${params.length}`); }
     if (is_free !== undefined) {
       params.push(is_free === 'true');
       where.push(`q.is_free = $${params.length}`);
@@ -61,7 +135,7 @@ const getQuestions = async (req, res, next) => {
       where.push(`q.question_text ILIKE $${params.length}`);
     }
     // category filter: 'practice' → year IS NULL, 'past_year' → year IS NOT NULL
-    if (category === 'practice')  where.push('q.year IS NULL');
+    if (category === 'practice') where.push('q.year IS NULL');
     if (category === 'past_year') where.push('q.year IS NOT NULL');
     // specific year filter (narrows past_year further)
     if (year) {
@@ -73,7 +147,7 @@ const getQuestions = async (req, res, next) => {
     }
 
     const whereClause = `WHERE ${where.join(' AND ')}`;
-    const offset      = (parseInt(page) - 1) * parseInt(limit);
+    const offset = (parseInt(page) - 1) * parseInt(limit);
 
     const { rows: countRows } = await pool.query(
       `SELECT COUNT(*) AS total FROM questions q ${whereClause}`, params
@@ -121,7 +195,7 @@ const getQuestion = async (req, res, next) => {
       'SELECT * FROM explanations WHERE question_id = $1', [id]
     );
 
-    question.options     = opts;
+    question.options = opts;
     question.explanation = expl[0] || null;
     return R.success(res, question);
   } catch (err) { next(err); }
@@ -140,14 +214,71 @@ const getPracticeQuestions = async (req, res, next) => {
     const count = Math.min(100, Math.max(1, parseInt(req.query.count) || 10));
     if (subject_id && isNaN(parseInt(subject_id))) return R.badRequest(res, 'Invalid subject_id');
 
-    const where  = ['q.is_active = TRUE'];
+    const VALID_MODES = new Set(['practice', 'past_year', 'random']);
+    const safeMode = VALID_MODES.has(mode) ? mode : 'practice';
+
+    const where = ['q.is_active = TRUE'];
     const params = [];
 
     if (!hasSubscription) where.push('q.is_free = TRUE');
     if (subject_id) { params.push(parseInt(subject_id)); where.push(`q.subject_id = $${params.length}`); }
-    if (year)       { params.push(year);                 where.push(`q.year = $${params.length}`); }
+
+    // Practice = year IS NULL; Past Year = year = selected year
+    if (safeMode === 'practice') {
+      where.push('q.year IS NULL');
+    } else if (safeMode === 'past_year') {
+      if (year) {
+        params.push(year);
+        where.push(`q.year = $${params.length}`);
+      } else {
+        where.push('q.year IS NOT NULL');
+      }
+    }
 
     const whereClause = `WHERE ${where.join(' AND ')}`;
+
+    if (!req.hasSubscription && subject_id) {
+      const parsedSubjectId = parseInt(subject_id);
+      if (!Number.isNaN(parsedSubjectId)) {
+        const usedCount = await fetchFreeSubjectUsage(req.user.id, parsedSubjectId);
+        if (usedCount >= FREE_SUBJECT_DAILY_LIMIT) {
+          return res.status(403).json({
+            success: false,
+            code: 'FREE_DAILY_LIMIT_REACHED',
+            message: 'This subject has reached the free daily limit. Upgrade to Premium for unlimited practice.',
+            data: {
+              used: usedCount,
+              limit: FREE_SUBJECT_DAILY_LIMIT,
+              remaining: 0,
+              subject_id: parsedSubjectId,
+            },
+          });
+        }
+      }
+    }
+
+    let availableCount = count;
+    if (!req.hasSubscription && subject_id) {
+      const parsedSubjectId = parseInt(subject_id);
+      if (!Number.isNaN(parsedSubjectId)) {
+        const usedCount = await fetchFreeSubjectUsage(req.user.id, parsedSubjectId);
+        availableCount = Math.min(count, Math.max(0, FREE_SUBJECT_DAILY_LIMIT - usedCount));
+      }
+    }
+
+    if (availableCount === 0) {
+      return res.status(403).json({
+        success: false,
+        code: 'FREE_DAILY_LIMIT_REACHED',
+        message: 'This subject has reached the free daily limit. Upgrade to Premium for unlimited practice.',
+        data: {
+          used: FREE_SUBJECT_DAILY_LIMIT,
+          limit: FREE_SUBJECT_DAILY_LIMIT,
+          remaining: 0,
+          subject_id: parseInt(subject_id),
+        },
+      });
+    }
 
     const { rows: countResult } = await pool.query(
       `SELECT COUNT(*) AS total FROM questions q ${whereClause}`, params
@@ -156,7 +287,7 @@ const getPracticeQuestions = async (req, res, next) => {
 
     let questions = [];
     if (totalCount > 0) {
-      const safeCount = Math.min(count, totalCount);
+      const safeCount = Math.min(availableCount, totalCount);
 
       if (totalCount <= count) {
         const { rows } = await pool.query(
@@ -176,7 +307,7 @@ const getPracticeQuestions = async (req, res, next) => {
         questions = rows.slice(0, safeCount);
       } else {
         const offset = Math.floor(Math.random() * (totalCount - safeCount));
-        const limitParam  = params.length + 1;
+        const limitParam = params.length + 1;
         const offsetParam = params.length + 2;
         const { rows } = await pool.query(
           `SELECT q.id, q.question_text, q.type, q.image_url, q.difficulty,
@@ -209,7 +340,7 @@ const getPracticeQuestions = async (req, res, next) => {
     allExpls.forEach(e => { explMap[e.question_id] = e; });
 
     questions.forEach(q => {
-      q.explanation    = explMap[q.id] || null;
+      q.explanation = explMap[q.id] || null;
       const correctOpt = q.options.find(o => o.is_correct);
       q.correct_answer = correctOpt ? correctOpt.option_label.trim().toUpperCase() : null;
     });
@@ -224,7 +355,7 @@ const getPracticeQuestions = async (req, res, next) => {
 const getAvailableYears = async (req, res, next) => {
   try {
     const { subject_ids } = req.query;
-    const where  = ['q.is_active = TRUE', 'q.year IS NOT NULL'];
+    const where = ['q.is_active = TRUE', 'q.year IS NOT NULL'];
     const params = [];
 
     if (subject_ids) {
@@ -251,49 +382,78 @@ const getAvailableYears = async (req, res, next) => {
 // SUBMIT PRACTICE ANSWERS
 // Returns subject-level breakdown only (no chapter/topic).
 // ─────────────────────────────────────────────
-const submitAnswers = async (req, res, next) => {
-  const client = await getClient();
+const createSubmitAnswers = (getClientFn = getClient) => async (req, res, next) => {
+  const client = await getClientFn();
   try {
     const { answers, subject_id, mode, time_taken_secs } = req.body;
+    const hasSubscription = !!req.hasSubscription;
 
     // Validate mode against the new simplified set
     const VALID_MODES = new Set(['practice', 'past_year', 'random']);
     const safeMode = VALID_MODES.has(mode) ? mode : 'practice';
+    const subjectIdInt = parsePositiveInteger(subject_id);
 
     if (!Array.isArray(answers) || answers.length === 0) {
-      client.release();
       return R.badRequest(res, 'answers must be a non-empty array');
     }
-    const VALID_OPTIONS = new Set(['A', 'B', 'C', 'D']);
+
+    if (!hasSubscription && (!Number.isInteger(subjectIdInt) || subjectIdInt <= 0)) {
+      return R.badRequest(res, 'A valid subject_id is required for free submissions');
+    }
 
     await client.query('BEGIN');
 
     let correct = 0, wrong = 0, skipped = 0;
     const answerDetails = [];
 
-    const qIds = answers.map(a => parseInt(a.question_id)).filter(id => !isNaN(id));
+    const qIds = answers.map(a => parsePositiveInteger(a.question_id)).filter(Boolean);
     if (!qIds.length) {
       await client.query('ROLLBACK');
-      client.release();
       return R.badRequest(res, 'No valid question IDs provided');
     }
 
-    const placeholders = makePlaceholders(qIds);
-    const { rows: correctRows } = await client.query(
-      `SELECT o.question_id, o.option_label
-       FROM options o
-       WHERE o.question_id IN (${placeholders}) AND o.is_correct = TRUE`,
-      qIds
-    );
+    const uniqueQIds = [...new Set(qIds)];
+    let correctRows;
+
+    if (!hasSubscription) {
+      const { rows } = await client.query(
+        `SELECT q.id AS question_id, o.option_label
+         FROM questions q
+         INNER JOIN options o ON o.question_id = q.id AND o.is_correct = TRUE
+         WHERE q.id = ANY($1::bigint[])
+           AND q.is_active = TRUE
+           AND q.subject_id = $2`,
+        [uniqueQIds, subjectIdInt]
+      );
+
+      const validQuestionIds = new Set(rows.map(row => Number(row.question_id)));
+      if (validQuestionIds.size !== uniqueQIds.length) {
+        await client.query('ROLLBACK');
+        return R.badRequest(res, 'All submitted questions must be active questions from the selected subject');
+      }
+      correctRows = rows;
+    } else {
+      const placeholders = makePlaceholders(uniqueQIds);
+      const { rows } = await client.query(
+        `SELECT o.question_id, o.option_label
+         FROM options o
+         WHERE o.question_id IN (${placeholders}) AND o.is_correct = TRUE`,
+        uniqueQIds
+      );
+      correctRows = rows;
+    }
 
     const correctMap = {};
     correctRows.forEach(r => { correctMap[r.question_id] = r; });
 
     const toUpdate = { correctIds: [], attemptedIds: [] };
+    const seenQuestionIds = new Set();
 
     for (const ans of answers) {
-      const qId = parseInt(ans.question_id);
-      if (!qId || isNaN(qId)) continue;
+      const qId = parsePositiveInteger(ans.question_id);
+      if (!qId) continue;
+      if (seenQuestionIds.has(qId)) continue;
+      seenQuestionIds.add(qId);
 
       const selected = ans.selected_option
         ? ans.selected_option.toString().trim().toUpperCase()
@@ -305,21 +465,68 @@ const submitAnswers = async (req, res, next) => {
       if (!correctData) continue;
 
       const correctLabel = correctData.option_label.trim().toUpperCase();
-      const is_correct   = selected === correctLabel;
+      const is_correct = selected === correctLabel;
 
       if (!selected) skipped++;
       else if (is_correct) correct++;
       else wrong++;
 
       answerDetails.push({
-        question_id:     qId,
+        question_id: qId,
         selected_option: selected,
-        correct_option:  correctLabel,
+        correct_option: correctLabel,
         is_correct,
       });
 
       toUpdate.attemptedIds.push(qId);
       if (is_correct) toUpdate.correctIds.push(qId);
+    }
+
+    const validSubmittedCount = answerDetails.filter(answer => answer.selected_option).length;
+    if (validSubmittedCount === 0) {
+      await client.query('ROLLBACK');
+      return R.badRequest(res, 'No valid submitted answers provided');
+    }
+
+    if (!hasSubscription && subjectIdInt && !Number.isNaN(subjectIdInt)) {
+      await client.query(
+        `INSERT INTO free_subject_daily_usage (user_id, subject_id, usage_date, question_count)
+         VALUES ($1, $2, CURRENT_DATE, 0)
+         ON CONFLICT (user_id, subject_id, usage_date) DO NOTHING`,
+        [req.user.id, subjectIdInt]
+      );
+
+      const { rows: usageRows } = await client.query(
+        `SELECT question_count
+         FROM free_subject_daily_usage
+         WHERE user_id = $1 AND subject_id = $2 AND usage_date = CURRENT_DATE
+         FOR UPDATE`,
+        [req.user.id, subjectIdInt]
+      );
+
+      const usedCount = parseInt(usageRows[0]?.question_count || 0, 10);
+      if (usedCount + validSubmittedCount > FREE_SUBJECT_DAILY_LIMIT) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({
+          success: false,
+          code: 'FREE_DAILY_LIMIT_REACHED',
+          message: `You have used ${usedCount}/${FREE_SUBJECT_DAILY_LIMIT} submitted answers for this subject today. Upgrade to Premium for unlimited access.`,
+          data: {
+            used: usedCount,
+            limit: FREE_SUBJECT_DAILY_LIMIT,
+            remaining: Math.max(0, FREE_SUBJECT_DAILY_LIMIT - usedCount),
+            subject_id: subjectIdInt,
+          },
+        });
+      }
+
+      await client.query(
+        `UPDATE free_subject_daily_usage
+         SET question_count = question_count + $1,
+             updated_at = NOW()
+         WHERE user_id = $2 AND subject_id = $3 AND usage_date = CURRENT_DATE`,
+        [validSubmittedCount, req.user.id, subjectIdInt]
+      );
     }
 
     // Update question stats
@@ -334,8 +541,8 @@ const submitAnswers = async (req, res, next) => {
       );
     }
 
-    const total     = answerDetails.length;
-    const accuracy  = total > 0 ? parseFloat(((correct / total) * 100).toFixed(2)) : 0;
+    const total = answerDetails.length;
+    const accuracy = total > 0 ? parseFloat(((correct / total) * 100).toFixed(2)) : 0;
     const timeTaken = parseInt(time_taken_secs) || 0;
 
     const { rows: resultRow } = await client.query(
@@ -346,7 +553,7 @@ const submitAnswers = async (req, res, next) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, NOW() - ($9::integer * INTERVAL '1 second'), NOW())
        RETURNING id`,
       [req.user.id, subject_id || null, safeMode,
-       total, correct, wrong, skipped, accuracy, timeTaken]
+        total, correct, wrong, skipped, accuracy, timeTaken]
     );
     const resultId = resultRow[0].id;
 
@@ -367,11 +574,11 @@ const submitAnswers = async (req, res, next) => {
     await client.query('COMMIT');
 
     return R.success(res, {
-      result_id:       resultId,
+      result_id: resultId,
       total, correct, wrong, skipped,
-      score_percent:   accuracy,
+      score_percent: accuracy,
       time_taken_secs: timeTaken,
-      answers:         answerDetails,
+      answers: answerDetails,
     }, 'Practice submitted successfully');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -380,6 +587,8 @@ const submitAnswers = async (req, res, next) => {
     client.release();
   }
 };
+
+const submitAnswers = createSubmitAnswers();
 
 // ─────────────────────────────────────────────
 // ADMIN: CREATE QUESTION
@@ -392,6 +601,8 @@ const createQuestion = async (req, res, next) => {
       options, explanation,
     } = req.body;
 
+    const parsedOptions = Array.isArray(parseJsonField(options, [])) ? parseJsonField(options, []) : [];
+    const parsedExplanation = parseJsonField(explanation, null);
     const image_url = req.file ? `/uploads/questions/${req.file.filename}` : null;
 
     const { rows: qResult } = await pool.query(
@@ -401,13 +612,13 @@ const createQuestion = async (req, res, next) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        RETURNING id`,
       [subject_id, type, question_text, image_url,
-       difficulty || 'medium', exam_importance || 'medium',
-       year || null, is_free || false, req.user.id]
+        difficulty || 'medium', exam_importance || 'medium',
+        year || null, is_free || false, req.user.id]
     );
     const qId = qResult[0].id;
 
-    if (options && options.length) {
-      for (const opt of options) {
+    if (parsedOptions.length) {
+      for (const opt of parsedOptions) {
         await pool.query(
           'INSERT INTO options (question_id, option_label, option_text, is_correct, sort_order) VALUES ($1,$2,$3,$4,$5)',
           [qId, opt.label, opt.text, opt.is_correct || false, opt.sort_order || 0]
@@ -415,16 +626,16 @@ const createQuestion = async (req, res, next) => {
       }
     }
 
-    if (explanation) {
+    if (parsedExplanation) {
       await pool.query(
         `INSERT INTO explanations
            (question_id, why_correct, why_a_wrong, why_b_wrong, why_c_wrong, why_d_wrong, memory_trick, common_mistake, reference)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-        [qId, explanation.why_correct || '',
-         explanation.why_a_wrong    || null, explanation.why_b_wrong    || null,
-         explanation.why_c_wrong    || null, explanation.why_d_wrong    || null,
-         explanation.memory_trick   || null, explanation.common_mistake || null,
-         explanation.reference      || null]
+        [qId, parsedExplanation.why_correct || '',
+          parsedExplanation.why_a_wrong || null, parsedExplanation.why_b_wrong || null,
+          parsedExplanation.why_c_wrong || null, parsedExplanation.why_d_wrong || null,
+          parsedExplanation.memory_trick || null, parsedExplanation.common_mistake || null,
+          parsedExplanation.reference || null]
       );
     }
 
@@ -445,6 +656,9 @@ const updateQuestion = async (req, res, next) => {
       options, explanation,
     } = req.body;
 
+    const parsedOptions = Array.isArray(parseJsonField(options, [])) ? parseJsonField(options, []) : [];
+    const parsedExplanation = parseJsonField(explanation, null);
+
     await client.query('BEGIN');
 
     await client.query(
@@ -453,12 +667,12 @@ const updateQuestion = async (req, res, next) => {
            difficulty=$4, exam_importance=$5, year=$6, is_free=$7
        WHERE id=$8`,
       [subject_id, type, question_text,
-       difficulty, exam_importance, year || null, is_free || false, id]
+        difficulty, exam_importance, year || null, is_free || false, id]
     );
 
-    if (Array.isArray(options) && options.length) {
+    if (parsedOptions.length) {
       await client.query('DELETE FROM options WHERE question_id = $1', [id]);
-      for (const opt of options) {
+      for (const opt of parsedOptions) {
         await client.query(
           'INSERT INTO options (question_id, option_label, option_text, is_correct, sort_order) VALUES ($1,$2,$3,$4,$5)',
           [id, opt.label, opt.text, opt.is_correct || false, opt.sort_order || 0]
@@ -466,18 +680,18 @@ const updateQuestion = async (req, res, next) => {
       }
     }
 
-    if (explanation) {
+    if (parsedExplanation) {
       await client.query('DELETE FROM explanations WHERE question_id = $1', [id]);
       await client.query(
         `INSERT INTO explanations
            (question_id, why_correct, why_a_wrong, why_b_wrong, why_c_wrong, why_d_wrong, memory_trick, common_mistake, reference)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
         [id,
-         explanation.why_correct    || '',
-         explanation.why_a_wrong    || null, explanation.why_b_wrong    || null,
-         explanation.why_c_wrong    || null, explanation.why_d_wrong    || null,
-         explanation.memory_trick   || null, explanation.common_mistake || null,
-         explanation.reference      || null]
+          parsedExplanation.why_correct || '',
+          parsedExplanation.why_a_wrong || null, parsedExplanation.why_b_wrong || null,
+          parsedExplanation.why_c_wrong || null, parsedExplanation.why_d_wrong || null,
+          parsedExplanation.memory_trick || null, parsedExplanation.common_mistake || null,
+          parsedExplanation.reference || null]
       );
     }
 
@@ -536,8 +750,8 @@ const importQuestions = async (req, res, next) => {
       importYear = parsedYear;
     }
 
-    const wb   = XLSX.readFile(req.file.path);
-    const ws   = wb.Sheets[wb.SheetNames[0]];
+    const wb = XLSX.readFile(req.file.path);
+    const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws);
 
     let created = 0;
@@ -657,8 +871,34 @@ const reportQuestion = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const getSubjectDailyUsage = async (req, res, next) => {
+  try {
+    const subjectId = parseInt(req.params.subject_id);
+    if (!subjectId || Number.isNaN(subjectId)) {
+      return R.badRequest(res, 'Invalid subject_id');
+    }
+
+    const premium = !!req.hasSubscription;
+    if (premium) {
+      return R.success(res, {
+        ...getDailyLimitStatus(0, FREE_SUBJECT_DAILY_LIMIT, true),
+        subject_id: subjectId,
+      });
+    }
+
+    const usedCount = await fetchFreeSubjectUsage(req.user.id, subjectId);
+    return R.success(res, {
+      ...getDailyLimitStatus(usedCount, FREE_SUBJECT_DAILY_LIMIT, false),
+      subject_id: subjectId,
+    });
+  } catch (err) { next(err); }
+};
+
 module.exports = {
+  FREE_SUBJECT_DAILY_LIMIT,
+  computeSubmittedAnswerCount,
+  getDailyLimitStatus,
   getQuestions, getQuestion, getPracticeQuestions, getAvailableYears,
-  submitAnswers, createQuestion, updateQuestion, deleteQuestion,
+  getSubjectDailyUsage, submitAnswers, createSubmitAnswers, createQuestion, updateQuestion, deleteQuestion,
   importQuestions, toggleBookmark, getBookmarks, reportQuestion,
 };

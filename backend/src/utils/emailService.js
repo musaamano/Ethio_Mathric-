@@ -3,11 +3,11 @@
  * Sends transactional emails via nodemailer (SMTP).
  * Configured via .env: MAIL_HOST, MAIL_PORT, MAIL_USER, MAIL_PASS, MAIL_FROM
  *
- * When MAIL_USER is not configured, emails are logged to the console instead
+ * When SMTP credentials are not configured, emails are logged to the console instead
  * so development works without an SMTP server.
  */
 const nodemailer = require('nodemailer');
-const logger     = require('./logger');
+const logger = require('./logger');
 
 // ── Transporter (lazy-initialised) ──────────────────────────
 let _transporter = null;
@@ -15,16 +15,23 @@ let _transporter = null;
 function getTransporter() {
   if (_transporter) return _transporter;
 
-  if (!process.env.MAIL_USER || process.env.MAIL_USER === 'your_email@gmail.com') {
+  const missingCredentials = !process.env.MAIL_USER
+    || !process.env.MAIL_PASS
+    || process.env.MAIL_USER === 'your_email@gmail.com'
+    || process.env.MAIL_USER === 'your-system-email@gmail.com'
+    || process.env.MAIL_PASS === 'your_app_password'
+    || process.env.MAIL_PASS === 'your-16-character-app-password';
+
+  if (missingCredentials) {
     // Dev mode — log emails to console, don't actually send
-    logger.warn('[EmailService] MAIL_USER not configured — emails will be logged only');
+    logger.warn('[EmailService] SMTP credentials not configured — emails will be logged only');
     return null;
   }
 
   _transporter = nodemailer.createTransport({
-    host:   process.env.MAIL_HOST || 'smtp.gmail.com',
-    port:   parseInt(process.env.MAIL_PORT) || 587,
-    secure: parseInt(process.env.MAIL_PORT) === 465,
+    host: process.env.MAIL_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.MAIL_PORT) || 587,
+    secure: process.env.MAIL_SECURE === 'true' || parseInt(process.env.MAIL_PORT) === 465,
     auth: {
       user: process.env.MAIL_USER,
       pass: process.env.MAIL_PASS,
@@ -36,16 +43,13 @@ function getTransporter() {
 
 // ── Core send helper ─────────────────────────────────────────
 async function sendMail({ to, subject, html }) {
-  const from = process.env.MAIL_FROM || '"Ethio Matric Academy" <noreply@ethiomatric.com>';
+  const from = process.env.MAIL_FROM
+    || (process.env.MAIL_USER ? `"Ethio Matric Academy" <${process.env.MAIL_USER}>` : '"Ethio Matric Academy" <noreply@ethiomatric.com>');
   const transporter = getTransporter();
 
   if (!transporter) {
     // Dev fallback — log instead of sending
     logger.info(`[EmailService] DEV EMAIL to: ${to} | subject: ${subject}`);
-    const linkMatch = html.match(/href="(http[^"]+)"/);
-    if (linkMatch) {
-      logger.info(`[EmailService] 🔗 DEV LINK: ${linkMatch[1]}`);
-    }
     return;
   }
 
@@ -67,7 +71,7 @@ async function sendMail({ to, subject, html }) {
  * @param {string} token       - Verification UUID token
  */
 async function sendVerificationEmail(to, firstName, token) {
-  const clientUrl  = process.env.CLIENT_URL || 'http://localhost:5173';
+  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
   const verifyLink = `${clientUrl}/verify-email/${token}`;
 
   const html = `
@@ -121,8 +125,8 @@ async function sendVerificationEmail(to, firstName, token) {
  * @param {string} token       - Password reset UUID token
  */
 async function sendPasswordResetEmail(to, firstName, token) {
-  const clientUrl  = process.env.CLIENT_URL || 'http://localhost:5173';
-  const resetLink  = `${clientUrl}/reset-password?token=${token}`;
+  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+  const resetLink = `${clientUrl}/reset-password?token=${token}`;
 
   const html = `
     <!DOCTYPE html>

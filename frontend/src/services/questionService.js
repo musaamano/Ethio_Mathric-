@@ -35,6 +35,12 @@ const questionService = {
     return data.data;
   },
 
+  // ── Get the current free-student daily subject usage ────
+  getSubjectDailyUsage: async (subject_id) => {
+    const { data } = await api.get(`/questions/subject-limit/${subject_id}`);
+    return data.data;
+  },
+
   // ── Bookmark / unbookmark a question ───────────────────
   toggleBookmark: async (question_id) => {
     const { data } = await api.post('/questions/bookmark', { question_id });

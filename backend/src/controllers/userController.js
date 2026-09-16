@@ -2,9 +2,9 @@
  * User Controller — Profile, settings, admin user management
  * PostgreSQL version
  */
-const bcrypt   = require('bcryptjs');
+const bcrypt = require('bcryptjs');
 const { pool } = require('../config/db');
-const R        = require('../utils/apiResponse');
+const R = require('../utils/apiResponse');
 
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS) || 12;
 
@@ -16,7 +16,7 @@ const getProfile = async (req, res, next) => {
     const { rows } = await pool.query(
       `SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.avatar_url,
               u.stream, u.school, u.region, u.city, u.is_email_verified,
-              u.last_login, u.created_at, r.name AS role,
+              u.access_type, u.last_login, u.created_at, r.name AS role,
               s.status AS subscription_status, s.expires_at AS subscription_expires
        FROM users u
        JOIN roles r ON r.id = u.role_id
@@ -39,8 +39,8 @@ const updateProfile = async (req, res, next) => {
     const avatar_url = req.file ? `/uploads/avatars/${req.file.filename}` : undefined;
 
     const fields = [
-      'first_name=$1','last_name=$2','phone=$3','stream=$4',
-      'school=$5','region=$6','city=$7',
+      'first_name=$1', 'last_name=$2', 'phone=$3', 'stream=$4',
+      'school=$5', 'region=$6', 'city=$7',
     ];
     const params = [
       first_name, last_name, phone || null, stream || null,
@@ -86,7 +86,7 @@ const getAllUsers = async (req, res, next) => {
     const { search, role_id, is_active, page = 1, limit = 20 } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
-    const where  = [];
+    const where = [];
     const params = [];
 
     if (search) {
@@ -164,7 +164,35 @@ const changeUserRole = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// ─────────────────────────────────────────────
+// STUDENT: SELECT FREE ACCESS
+// Premium is granted only by an active subscription.
+// ─────────────────────────────────────────────
+const updateAccessType = async (req, res, next) => {
+  try {
+    if (req.user.role_id !== 1) {
+      return R.forbidden(res, 'Only students can select access type');
+    }
+
+    const { access_type } = req.body;
+    if (access_type !== 'free') {
+      return R.badRequest(res, 'Only free access can be selected here');
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE users
+       SET access_type = 'free', updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, access_type`,
+      [req.user.id]
+    );
+
+    if (!rows.length) return R.notFound(res, 'User not found');
+    return R.success(res, rows[0], 'Free access selected');
+  } catch (err) { next(err); }
+};
+
 module.exports = {
-  getProfile, updateProfile, changePassword,
+  getProfile, updateAccessType, updateProfile, changePassword,
   getAllUsers, toggleUserStatus, forceLogout, changeUserRole,
 };

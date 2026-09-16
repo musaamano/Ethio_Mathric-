@@ -3,13 +3,13 @@
  * Handles: register, login, logout, refresh, forgot/reset password
  * PostgreSQL version
  */
-const bcrypt   = require('bcryptjs');
+const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const UAParser = require('ua-parser-js');
 const { pool } = require('../config/db');
 const { signAccess, signRefresh, verifyRefresh } = require('../config/jwt');
-const R        = require('../utils/apiResponse');
-const logger   = require('../utils/logger');
+const R = require('../utils/apiResponse');
+const logger = require('../utils/logger');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/emailService');
 
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS) || 12;
@@ -29,8 +29,8 @@ const register = async (req, res, next) => {
       return R.badRequest(res, 'An account with this email already exists');
     }
 
-    const password_hash  = await bcrypt.hash(password, BCRYPT_ROUNDS);
-    const verify_token   = uuidv4();
+    const password_hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const verify_token = uuidv4();
     const verify_expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
     const { rows: result } = await pool.query(
@@ -40,14 +40,11 @@ const register = async (req, res, next) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,1)
        RETURNING id`,
       [first_name, last_name, email, phone || null, password_hash,
-       stream || null, school || null, region || null,
-       verify_token, verify_expires]
+        stream || null, school || null, region || null,
+        verify_token, verify_expires]
     );
 
-    // Send verification email (non-blocking)
-    sendVerificationEmail(email, first_name, verify_token).catch(err =>
-      logger.warn(`[Auth] Verification email failed for ${email}: ${err.message}`)
-    );
+    await sendVerificationEmail(email, first_name, verify_token);
     logger.info(`New student registered: ${email}`);
 
     return R.created(res,
@@ -67,7 +64,13 @@ const login = async (req, res, next) => {
     const { email, password, device_id, remember_me } = req.body;
 
     const { rows: users } = await pool.query(
-      `SELECT u.*, r.name AS role_name
+      `SELECT u.*, r.name AS role_name,
+              EXISTS (
+                SELECT 1 FROM subscriptions s
+                WHERE s.user_id = u.id
+                  AND s.status = 'active'
+                  AND s.expires_at > NOW()
+              ) AS has_active_subscription
        FROM users u
        JOIN roles r ON r.id = u.role_id
        WHERE u.email = $1`,
@@ -88,7 +91,7 @@ const login = async (req, res, next) => {
       return res.status(403).json({
         success: false,
         message: 'Email not verified. Please check your inbox.',
-        code:    'EMAIL_NOT_VERIFIED',
+        code: 'EMAIL_NOT_VERIFIED',
       });
     }
 
@@ -98,10 +101,10 @@ const login = async (req, res, next) => {
     }
 
     // Parse device info from User-Agent
-    const ua      = new UAParser(req.headers['user-agent']);
+    const ua = new UAParser(req.headers['user-agent']);
     const browser = `${ua.getBrowser().name || 'Unknown'} ${ua.getBrowser().version || ''}`.trim();
-    const os      = `${ua.getOS().name || 'Unknown'} ${ua.getOS().version || ''}`.trim();
-    const ip      = req.ip || req.connection?.remoteAddress;
+    const os = `${ua.getOS().name || 'Unknown'} ${ua.getOS().version || ''}`.trim();
+    const ip = req.ip || req.connection?.remoteAddress;
 
     // One active session per account — invalidate previous sessions
     await pool.query(
@@ -110,12 +113,12 @@ const login = async (req, res, next) => {
     );
 
     // Generate tokens
-    const payload       = { id: user.id, role: user.role_name, email: user.email };
-    const accessToken   = signAccess(payload);
-    const refreshToken  = signRefresh(payload);
+    const payload = { id: user.id, role: user.role_name, email: user.email };
+    const accessToken = signAccess(payload);
+    const refreshToken = signRefresh(payload);
     const refreshExpiry = remember_me
       ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
-      : new Date(Date.now() +  7 * 24 * 60 * 60 * 1000); // 7 days
+      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
     // Save session
     const finalDeviceId = device_id || uuidv4();
@@ -135,22 +138,24 @@ const login = async (req, res, next) => {
     // Set refresh token as HttpOnly cookie
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure:   process.env.NODE_ENV === 'production',
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      expires:  refreshExpiry,
+      expires: refreshExpiry,
     });
 
     return R.success(res, {
       accessToken,
       user: {
-        id:         user.id,
+        id: user.id,
         first_name: user.first_name,
-        last_name:  user.last_name,
-        email:      user.email,
-        role:       user.role_name,
+        last_name: user.last_name,
+        email: user.email,
+        role: user.role_name,
         avatar_url: user.avatar_url,
-        stream:     user.stream,
-        device_id:  finalDeviceId,
+        stream: user.stream,
+        access_type: user.access_type,
+        has_active_subscription: user.has_active_subscription,
+        device_id: finalDeviceId,
       },
     }, 'Login successful');
   } catch (err) {
@@ -188,8 +193,8 @@ const refreshToken = async (req, res, next) => {
       return R.unauthorized(res, 'Account deactivated');
     }
 
-    const payload         = { id: decoded.id, role: session.role_name, email: decoded.email };
-    const newAccess       = signAccess(payload);
+    const payload = { id: decoded.id, role: session.role_name, email: decoded.email };
+    const newAccess = signAccess(payload);
     const newRefreshToken = signRefresh(payload);
 
     await pool.query(
@@ -199,9 +204,9 @@ const refreshToken = async (req, res, next) => {
 
     res.cookie('refreshToken', newRefreshToken, {
       httpOnly: true,
-      secure:   process.env.NODE_ENV === 'production',
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      expires:  new Date(session.expires_at),
+      expires: new Date(session.expires_at),
     });
 
     return R.success(res, { accessToken: newAccess }, 'Token refreshed');
@@ -250,8 +255,8 @@ const forgotPassword = async (req, res, next) => {
       return R.success(res, {}, 'If your email is registered, you will receive a reset link.');
     }
 
-    const user        = users[0];
-    const resetToken  = uuidv4();
+    const user = users[0];
+    const resetToken = uuidv4();
     const resetExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     await pool.query(
@@ -259,9 +264,7 @@ const forgotPassword = async (req, res, next) => {
       [resetToken, resetExpiry, user.id]
     );
 
-    sendPasswordResetEmail(email, user.first_name, resetToken).catch(err =>
-      logger.warn(`[Auth] Reset email failed for ${email}: ${err.message}`)
-    );
+    await sendPasswordResetEmail(email, user.first_name, resetToken);
     logger.info(`Password reset requested for: ${email}`);
 
     return R.success(res, {}, 'If your email is registered, you will receive a reset link.');
@@ -379,7 +382,7 @@ const resendVerification = async (req, res, next) => {
       return R.success(res, {}, 'Your email is already verified. Please log in.');
     }
 
-    const verifyToken   = uuidv4();
+    const verifyToken = uuidv4();
     const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     await pool.query(
@@ -387,9 +390,7 @@ const resendVerification = async (req, res, next) => {
       [verifyToken, verifyExpires, user.id]
     );
 
-    sendVerificationEmail(email, user.first_name, verifyToken).catch(err =>
-      logger.warn(`[Auth] Resend verification email failed for ${email}: ${err.message}`)
-    );
+    await sendVerificationEmail(email, user.first_name, verifyToken);
     logger.info(`Verification email resent for: ${email}`);
 
     return R.success(res, {}, 'If your email is registered and unverified, a new link has been sent.');

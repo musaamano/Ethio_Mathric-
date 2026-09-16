@@ -11,15 +11,10 @@ services:
         value: production
 
   # ── Frontend Static Site ─────────────────────────────────
-  - type: web
+  - type: static
     name: ethio-matric-academy
-    runtime: static
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
-    # VITE_API_URL is baked into the build via frontend/.env.production
-    # which is committed to the repository (contains only a public URL, no secrets)
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
+    # _redirects in dist/ handles SPA fallback: /* → /index.html 200
+    # VITE_API_URL is baked at build time via frontend/.env.production

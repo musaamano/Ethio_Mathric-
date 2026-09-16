@@ -26,7 +26,7 @@ function getCacheKey(subjectIds) {
 }
 
 function getCached(subjectIds) {
-  const key   = getCacheKey(subjectIds);
+  const key = getCacheKey(subjectIds);
   const entry = _dbVectorCache.get(key);
   if (!entry) return null;
   if (Date.now() - entry.fetchedAt > DB_VECTOR_CACHE_TTL_MS) {
@@ -43,14 +43,14 @@ function setCached(subjectIds, existing, existingVecs) {
 
 // Stop words to exclude from TF-IDF vocabulary
 const STOP_WORDS = new Set([
-  'the','a','an','is','are','was','were','be','been','being',
-  'have','has','had','do','does','did','will','would','could',
-  'should','may','might','shall','can','need','must','of','to',
-  'in','on','at','by','for','with','about','as','into','from',
-  'that','this','these','those','and','but','or','nor','so','yet',
-  'if','then','when','where','which','who','whom','whose','what',
-  'how','why','all','both','each','every','few','more','most','other',
-  'some','such','no','not','only','same','than','too','very',
+  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+  'should', 'may', 'might', 'shall', 'can', 'need', 'must', 'of', 'to',
+  'in', 'on', 'at', 'by', 'for', 'with', 'about', 'as', 'into', 'from',
+  'that', 'this', 'these', 'those', 'and', 'but', 'or', 'nor', 'so', 'yet',
+  'if', 'then', 'when', 'where', 'which', 'who', 'whom', 'whose', 'what',
+  'how', 'why', 'all', 'both', 'each', 'every', 'few', 'more', 'most', 'other',
+  'some', 'such', 'no', 'not', 'only', 'same', 'than', 'too', 'very',
 ]);
 
 // ─────────────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ function buildTfidfVectors(texts) {
   const N = texts.length || 1;
 
   return tokenizedList.map(tokens => {
-    const tf  = termFrequency(tokens);
+    const tf = termFrequency(tokens);
     const vec = {};
     let norm = 0;
     Object.keys(tf).forEach(t => {
@@ -113,7 +113,7 @@ function cosineSimilarity(objA, objB) {
   // Iterate over the smaller vector for speed
   const keysA = Object.keys(vecA);
   const keysB = Object.keys(vecB);
-  
+
   let dot = 0;
   if (keysA.length < keysB.length) {
     for (let i = 0; i < keysA.length; i++) {
@@ -140,23 +140,23 @@ function cosineSimilarity(objA, objB) {
  * 2. Each other within the same batch (intra-batch)
  *
  * @param {Array}  questions  - Incoming question objects
- * @param {number} threshold  - Similarity % to flag as duplicate (default 78)
+ * @param {number} threshold  - Similarity % to flag as duplicate (default 95)
  * @returns {Array} Questions with .duplicate field attached
  */
-async function detectDuplicates(questions, threshold = 78) {
+async function detectDuplicates(questions, threshold = 95) {
   if (!questions.length) return questions;
 
   // ── Load / cache existing questions from DB ─────────────
   const subjectIds = [...new Set(questions.map(q => q.subject_id).filter(Boolean))];
 
-  let existing    = [];
+  let existing = [];
   let existingVecs = [];
 
   if (subjectIds.length > 0) {
     // Check cache first — avoids re-fetching + re-vectorising the DB on every upload
     const cached = getCached(subjectIds);
     if (cached) {
-      existing     = cached.existing;
+      existing = cached.existing;
       existingVecs = cached.existingVecs;
     } else {
       try {
@@ -193,9 +193,9 @@ async function detectDuplicates(questions, threshold = 78) {
     // Recompute combined IDF using cached DB token info + new incoming tokens
     // This is still faster than re-tokenising all DB texts from scratch because
     // we only need to tokenise the (small) incoming batch.
-    const allTexts   = [...existing.map(e => e.question_text), ...incomingTexts];
-    allVectors       = buildTfidfVectors(allTexts);
-    existingVecs     = allVectors.slice(0, existing.length);  // updated with new IDF
+    const allTexts = [...existing.map(e => e.question_text), ...incomingTexts];
+    allVectors = buildTfidfVectors(allTexts);
+    existingVecs = allVectors.slice(0, existing.length);  // updated with new IDF
     const incomingVecs = allVectors.slice(existing.length);
     return _compare(questions, existing, existingVecs, incomingVecs, threshold);
   } else {
@@ -209,14 +209,14 @@ async function detectDuplicates(questions, threshold = 78) {
 function _compare(questions, existing, existingVecs, incomingVecs, threshold) {
   return questions.map((q, qi) => {
     const qVec = incomingVecs[qi];
-    let   bestSim   = 0;
-    let   bestMatch = null;
+    let bestSim = 0;
+    let bestMatch = null;
 
     // Check against DB
     for (let ei = 0; ei < existing.length; ei++) {
       const sim = cosineSimilarity(qVec, existingVecs[ei]);
       if (sim > bestSim) {
-        bestSim   = sim;
+        bestSim = sim;
         bestMatch = { source: 'db', id: existing[ei].id, text: existing[ei].question_text };
       }
     }
@@ -225,7 +225,7 @@ function _compare(questions, existing, existingVecs, incomingVecs, threshold) {
     for (let pi = 0; pi < qi; pi++) {
       const sim = cosineSimilarity(qVec, incomingVecs[pi]);
       if (sim > bestSim) {
-        bestSim   = sim;
+        bestSim = sim;
         bestMatch = { source: 'batch', batchIndex: pi, text: questions[pi].question_text };
       }
     }
@@ -235,12 +235,12 @@ function _compare(questions, existing, existingVecs, incomingVecs, threshold) {
     return {
       ...q,
       duplicate: isDuplicate ? {
-        existing_id:   bestMatch.source === 'db' ? bestMatch.id : null,
-        batch_index:   bestMatch.source === 'batch' ? bestMatch.batchIndex : null,
-        similarity:    bestSim,
-        matched_text:  bestMatch.text?.slice(0, 100),
-        source:        bestMatch.source,
-        action:        'skip', // default: skip | replace | keep_both
+        existing_id: bestMatch.source === 'db' ? bestMatch.id : null,
+        batch_index: bestMatch.source === 'batch' ? bestMatch.batchIndex : null,
+        similarity: bestSim,
+        matched_text: bestMatch.text?.slice(0, 100),
+        source: bestMatch.source,
+        action: 'skip', // default: skip | replace | keep_both
       } : null,
     };
   });
