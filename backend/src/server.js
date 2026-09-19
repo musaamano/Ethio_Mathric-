@@ -41,10 +41,13 @@ app.use(helmet({
 // ─── CORS ────────────────────────────────────
 // CLIENT_URL may be a comma-separated list of allowed origins for multi-domain
 // deployments (e.g. "https://ethiomatric.com,https://www.ethiomatric.com").
-const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
-  .split(',')
-  .map(o => o.trim())
-  .filter(Boolean);
+const allowedOrigins = [
+  ...(process.env.CLIENT_URL || 'http://localhost:5173')
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean),
+  'https://ethiomathric.netlify.app',
+];
 
 app.use(cors({
   origin: (origin, cb) => {
