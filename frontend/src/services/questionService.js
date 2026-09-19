@@ -22,7 +22,7 @@ const questionService = {
   },
 
   // ── Get practice questions ──────────────────────────────
-  // params: { subject_id, year, mode, count }
+  // params: { subject_id, year, mode, count, exclude_completed }
   getPracticeQuestions: async (params = {}) => {
     const { data } = await api.get('/questions/practice', { params });
     return data.data;
@@ -78,6 +78,12 @@ const questionService = {
   // ── Admin: delete question ──────────────────────────────
   deleteQuestion: async (id) => {
     const { data } = await api.delete(`/questions/${id}`);
+    return data;
+  },
+
+  // ── Admin: toggle question active status ─────────────────
+  toggleQuestionStatus: async (questionId) => {
+    const { data } = await api.put(`/questions/${questionId}/status`);
     return data;
   },
 

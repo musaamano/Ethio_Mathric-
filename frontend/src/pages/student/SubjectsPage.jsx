@@ -17,22 +17,22 @@ import { snakeToTitle } from '../../utils/helpers';
 
 // Subject colour dot / icon background
 const SUBJECT_ICONS = {
-  'math-natural':    '📐',
-  'math-social':     '📐',
-  'physics':         '⚛️',
-  'chemistry':       '🧪',
-  'biology':         '🧬',
+  'math-natural': '📐',
+  'math-social': '📐',
+  'physics': '⚛️',
+  'chemistry': '🧪',
+  'biology': '🧬',
   'english-natural': '📖',
-  'english-social':  '📖',
-  'ict':             '💻',
-  'economics':       '📊',
-  'history':         '🏛️',
-  'geography':       '🌍',
-  'citizenship':     '⚖️',
+  'english-social': '📖',
+  'ict': '💻',
+  'economics': '📊',
+  'history': '🏛️',
+  'geography': '🌍',
+  'citizenship': '⚖️',
 };
 
 function SubjectCard({ subject, onSelect }) {
-  const icon  = SUBJECT_ICONS[subject.slug] || '📘';
+  const icon = SUBJECT_ICONS[subject.slug] || '📘';
   const color = subject.color || '#52B788';
 
   return (
@@ -69,7 +69,7 @@ function SubjectCard({ subject, onSelect }) {
           className="w-4 h-4 text-gray-300 group-hover:text-primary-400 group-hover:translate-x-1 transition-all flex-shrink-0"
           fill="none" viewBox="0 0 24 24" stroke="currentColor"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7"/>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
         </svg>
       </div>
 
@@ -88,12 +88,12 @@ function SubjectCard({ subject, onSelect }) {
 }
 
 export default function SubjectPicker() {
-  const { user }  = useAuth();
-  const navigate  = useNavigate();
-  const toast     = useToast();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const toast = useToast();
 
   const [subjects, setSubjects] = useState([]);
-  const [loading,  setLoading]  = useState(true);
+  const [loading, setLoading] = useState(true);
   const [streamName, setStreamName] = useState('');
 
   useEffect(() => {
@@ -123,7 +123,7 @@ export default function SubjectPicker() {
 
   const handleSelect = (subject) => {
     // Navigate directly to the practice session — no chapter/topic selection
-    navigate(`/dashboard/practice?subject_id=${subject.id}&mode=practice&count=20`);
+    navigate(`/dashboard/practice?subject_id=${subject.id}&mode=practice&count=100`);
   };
 
   if (loading) return <LoadingSpinner variant="dots" text="Loading subjects..." className="py-20" />;

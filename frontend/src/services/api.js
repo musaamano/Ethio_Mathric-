@@ -118,9 +118,19 @@ api.interceptors.response.use(
         clearTokens();
 
         // Avoid redirect storms during initial session restore or when the user is already logged out.
+        // Do not redirect if the visitor is already on a public route — auth failure on a public
+        // page (e.g. AuthContext refresh on "/") must NOT force navigation to "/login".
         if (!original.url?.includes('/auth/refresh') && !original.url?.includes('/users/profile')) {
           const currentPath = window.location.pathname;
-          if (currentPath !== '/login') {
+          const PUBLIC_PATHS = [
+            '/', '/login', '/register',
+            '/forgot-password', '/reset-password',
+            '/about', '/features', '/pricing',
+            '/faq', '/contact', '/privacy', '/terms',
+          ];
+          const isPublicPath = PUBLIC_PATHS.includes(currentPath) ||
+            currentPath.startsWith('/verify-email/');
+          if (!isPublicPath) {
             window.location.href = '/login';
           }
         }

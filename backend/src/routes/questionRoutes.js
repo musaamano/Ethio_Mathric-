@@ -31,6 +31,7 @@ router.post('/', authenticate, authorize('admin', 'super_admin'), upload.single(
 router.post('/import', authenticate, authorize('admin', 'super_admin'), uploadExcel.single('file'), ctrl.importQuestions);
 router.get('/:id', authenticate, authorize('admin', 'super_admin'), ctrl.getQuestion);
 router.put('/:id', authenticate, authorize('admin', 'super_admin'), ctrl.updateQuestion);
+router.put('/:id/status', authenticate, authorize('admin', 'super_admin'), ctrl.toggleQuestionStatus);
 router.delete('/:id', authenticate, authorize('admin', 'super_admin'), ctrl.deleteQuestion);
 
 module.exports = router;

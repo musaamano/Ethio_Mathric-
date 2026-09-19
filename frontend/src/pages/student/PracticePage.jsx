@@ -47,8 +47,25 @@ function HeaderBar({ currentIdx, total, correct, wrong, timer }) {
 }
 
 // ── Finish screen ─────────────────────────────────────────────
-function FinishScreen({ result, timeTaken, onReset }) {
+function ReviewExplanation({ explanation }) {
+  if (!explanation) return <p className="text-sm text-gray-400">No explanation is available for this question.</p>;
+
+  return (
+    <div className="mt-3 space-y-2 text-sm text-gray-700">
+      {explanation.why_correct && <p className="whitespace-pre-line"><strong>Why it is correct:</strong> {explanation.why_correct}</p>}
+      {['a', 'b', 'c', 'd'].map(label => explanation[`why_${label}_wrong`] && (
+        <p key={label} className="whitespace-pre-line"><strong>Why {label.toUpperCase()} is wrong:</strong> {explanation[`why_${label}_wrong`]}</p>
+      ))}
+      {explanation.memory_trick && <p className="whitespace-pre-line"><strong>Memory trick:</strong> {explanation.memory_trick}</p>}
+      {explanation.common_mistake && <p className="whitespace-pre-line"><strong>Common mistake:</strong> {explanation.common_mistake}</p>}
+      {explanation.reference && <p className="text-xs text-gray-400">Reference: {explanation.reference}</p>}
+    </div>
+  );
+}
+
+function FinishScreen({ result, questions, answers, timeTaken, onTryAgain, onNextQuestions, noRemaining }) {
   const navigate = useNavigate();
+  const [reviewing, setReviewing] = useState(false);
   const score = formatScore(result.score_percent);
   return (
     <div className="max-w-2xl mx-auto space-y-5 py-6">
@@ -58,11 +75,12 @@ function FinishScreen({ result, timeTaken, onReset }) {
         </div>
         <h2 className="font-display font-extrabold text-3xl text-primary-700 mb-1">Practice Complete!</h2>
         <div className={`text-5xl font-extrabold font-display my-4 ${score.color}`}>{score.text}</div>
-        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
           {[
             { label: 'Correct', value: result.correct, color: 'bg-mint-light text-sage-700' },
             { label: 'Wrong', value: result.wrong, color: 'bg-red-50 text-red-600' },
             { label: 'Skipped', value: result.skipped, color: 'bg-gray-100 text-gray-500' },
+            { label: 'Total', value: result.total, color: 'bg-primary-50 text-primary-700' },
             { label: 'Time', value: formatDuration(timeTaken), color: 'bg-blue-50 text-blue-600' },
           ].map(s => (
             <div key={s.label} className={`${s.color} rounded-2xl p-3`}>
@@ -71,9 +89,44 @@ function FinishScreen({ result, timeTaken, onReset }) {
             </div>
           ))}
         </div>
+        <div className="text-sm font-semibold text-gray-500">Percentage: {result.score_percent}%</div>
       </div>
+      {reviewing && (
+        <div className="space-y-4">
+          <h3 className="font-display font-bold text-xl text-primary-700">Review Answers</h3>
+          {questions.map((question, index) => {
+            const answer = answers[question.id] || {};
+            return (
+              <div key={question.id} className="soft-card p-5">
+                <div className="text-xs font-bold uppercase tracking-wide text-gray-400">Question {index + 1}</div>
+                <p className="font-semibold text-gray-800 mt-2 whitespace-pre-line">{question.question_text}</p>
+                <div className="mt-3 grid gap-1 text-sm">
+                  <div><span className="font-semibold text-gray-500">Your answer:</span> {answer.selected || 'Not answered'}</div>
+                  <div><span className="font-semibold text-gray-500">Correct answer:</span> {answer.correct || question.correct_answer || 'Unavailable'}</div>
+                  <div className={answer.selected
+                    ? (answer.isCorrect ? 'text-sage-700 font-semibold' : 'text-red-600 font-semibold')
+                    : 'text-gray-500 font-semibold'}>
+                    {answer.selected ? (answer.isCorrect ? 'Correct' : 'Incorrect') : 'Skipped'}
+                  </div>
+                </div>
+                <ReviewExplanation explanation={question.explanation} />
+              </div>
+            );
+          })}
+        </div>
+      )}
       <div className="flex flex-col gap-3">
-        <Button fullWidth onClick={onReset}>Practice Again ⚡</Button>
+        <Button fullWidth variant="outline" onClick={() => setReviewing(value => !value)}>
+          {reviewing ? 'Hide Review' : 'Review Answers'}
+        </Button>
+        <Button fullWidth onClick={onTryAgain}>{noRemaining ? 'Practice Again' : 'Try Again'} ⚡</Button>
+        {noRemaining ? (
+          <div className="soft-card p-4 text-center text-sm font-semibold text-sage-700">
+            🎉 You have completed all available questions for this subject.
+          </div>
+        ) : (
+          <Button fullWidth variant="secondary" onClick={onNextQuestions}>Next Questions</Button>
+        )}
         <Button fullWidth variant="outline" onClick={() => navigate('/dashboard')}>Back to Dashboard</Button>
       </div>
     </div>
@@ -93,7 +146,9 @@ export default function PracticePage() {
   // Normalise to valid backend modes only
   const VALID_MODES = new Set(['practice', 'past_year', 'random']);
   const mode = VALID_MODES.has(rawMode) ? rawMode : 'practice';
-  const count = Math.min(100, Math.max(1, parseInt(searchParams.get('count') || '20')));
+  const count = mode === 'practice'
+    ? 100
+    : Math.min(100, Math.max(1, parseInt(searchParams.get('count') || '20')));
   const isPremiumUser = !!(user?.has_active_subscription || user?.subscription_status === 'active');
 
   // ── ALL hooks must be called unconditionally — no early return before this line ──
@@ -104,6 +159,7 @@ export default function PracticePage() {
   const [submitting, setSubmitting] = useState(false);
   const [finished, setFinished] = useState(false);
   const [result, setResult] = useState(null);
+  const [noRemaining, setNoRemaining] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [answers, setAnswers] = useState({});
   const [subjectUsage, setSubjectUsage] = useState(null);
@@ -320,40 +376,45 @@ export default function PracticePage() {
     return 'idle';
   }, [isAnswered, questionState]);
 
-  const handleReset = () => {
-    clearSession(); setQuestions([]); setAnswers({});
-    setCurrentIdx(0); setFinished(false); setResult(null);
-    setLoading(true); setLoadError(null); timer.reset(totalSecs);
+  const handleTryAgain = () => {
+    clearSession();
+    setAnswers({});
+    setCurrentIdx(0);
+    setFinished(false);
+    setResult(null);
+    setNoRemaining(false);
+    startTimeRef.current = Date.now();
+    saveSession(questions, {}, 0);
+    timer.reset(questions.length * SECS_PER_Q);
+  };
 
-    const loadAgain = async () => {
-      let nextCount = count;
+  const handleNextQuestions = async () => {
+    clearSession();
+    setAnswers({});
+    setCurrentIdx(0);
+    setFinished(false);
+    setResult(null);
+    setNoRemaining(false);
+    setLoading(true);
 
-      if (!isPremiumUser) {
-        const usage = await questionService.getSubjectDailyUsage(subject_id);
-        setSubjectUsage(usage);
-        if (usage.remaining <= 0 || usage.reached) return;
-        nextCount = Math.min(count, usage.remaining);
+    try {
+      const params = { subject_id, mode, count: 100, exclude_completed: true };
+      const nextQuestions = await questionService.getPracticeQuestions(params);
+      setQuestions(nextQuestions);
+      if (!nextQuestions.length) {
+        setNoRemaining(true);
+        setLoading(false);
+        setFinished(true);
+        return;
       }
-
-      const params = { subject_id, mode, count: nextCount };
-      if (mode === 'past_year' && year) params.year = year;
-
-      const qs = await questionService.getPracticeQuestions(params);
-      setQuestions(qs);
       startTimeRef.current = Date.now();
-      saveSession(qs, {}, 0);
-    };
-
-    loadAgain()
-      .catch(err => {
-        if (err?.response?.data?.code === 'FREE_DAILY_LIMIT_REACHED') {
-          setSubjectUsage(err.response.data.data);
-          setLoadError(null);
-          return;
-        }
-        toast.error(err?.response?.data?.message || 'Failed to reload questions');
-      })
-      .finally(() => setLoading(false));
+      saveSession(nextQuestions, {}, 0);
+      timer.reset(nextQuestions.length * SECS_PER_Q);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to load next questions');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // ── Conditional renders — ALL hooks have been called above this line ──
@@ -393,6 +454,18 @@ export default function PracticePage() {
     </div>
   );
 
+  if (finished && result) return (
+    <FinishScreen result={result} questions={questions} answers={answers}
+      timeTaken={result.time_taken_secs} onTryAgain={handleTryAgain}
+      onNextQuestions={handleNextQuestions} noRemaining={noRemaining} />
+  );
+
+  if (finished && noRemaining) return (
+    <FinishScreen result={{ score_percent: 0, correct: 0, wrong: 0, skipped: 0, total: 0 }}
+      questions={[]} answers={{}} timeTaken={0} onTryAgain={() => navigate('/dashboard/practice')}
+      onNextQuestions={handleNextQuestions} noRemaining />
+  );
+
   if (!questions.length) return (
     <div className="flex flex-col items-center justify-center py-24 gap-4">
       <div className="text-5xl">📭</div>
@@ -401,8 +474,6 @@ export default function PracticePage() {
       <Button onClick={() => navigate(-1)} variant="outline">Go Back</Button>
     </div>
   );
-
-  if (finished && result) return <FinishScreen result={result} timeTaken={result.time_taken_secs} onReset={handleReset} />;
 
   const answeredCount = Object.keys(answers).length;
   const canFinish = currentIdx === totalQ - 1;

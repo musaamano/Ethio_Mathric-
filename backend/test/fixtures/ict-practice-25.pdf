@@ -1,0 +1,315 @@
+Ethio Matric Academy
+ICT Practice Questions
+Title: Ethio Matric Academy – ICT Practice Questions
+Subject: ICT
+Question Type: Practice
+Number of Questions: 25
+These are original practice questions created for exam preparation. They are not taken from any official national
+examination.
+Question 1:
+Which of the following is an example of an input device?
+A. Keyboard
+B. Monitor
+C. Printer
+D. Speaker
+Correct Answer: A
+Explanation:
+An input device allows data to be entered into a computer; a keyboard is used to type data and
+commands into the system. A monitor, printer, and speaker are all output devices because they
+present processed information to the user rather than collecting it.
+Question 2:
+Which of the following devices is used to produce a hard copy of digital documents?
+A. Scanner
+B. Microphone
+C. Printer
+D. Webcam
+Correct Answer: C
+Explanation:
+A printer converts digital documents into a physical, paper-based 'hard copy'. A scanner converts
+paper documents into digital form (the opposite process), while a microphone and webcam are used
+to capture audio and video input, not to produce printed output.
+Question 3:
+Which of the following represents the correct order of storage units from smallest to largest?
+A. MB, KB, GB, TB
+B. KB, MB, GB, TB
+C. GB, TB, KB, MB
+D. TB, GB, MB, KB
+Correct Answer: B
+Explanation:
+Storage units increase in size in the order: Kilobyte (KB), Megabyte (MB), Gigabyte (GB), Terabyte
+(TB), with each unit being approximately 1,024 times larger than the one before it. The other options
+place these units out of their correct increasing order.
+Question 4:
+What is the decimal equivalent of the binary number 1011?
+A. 9
+B. 10
+C. 12
+D. 11
+Correct Answer: D
+Explanation:
+To convert binary to decimal, multiply each digit by its place value (powers of 2) and add the results:
+(1x8) + (0x4) + (1x2) + (1x1) = 8 + 0 + 2 + 1 = 11. The other options result from incorrect place-value
+calculations.
+Question 5:
+What is the binary equivalent of the decimal number 25?
+A. 11001
+B. 11010
+C. 10101
+D. 11101
+Correct Answer: A
+Explanation:
+25 can be broken down into powers of 2 as 16 + 8 + 1, which corresponds to setting the 16s, 8s, and
+1s place values to 1, giving 11001 in binary. The other options do not correctly represent the value 25
+when converted back to decimal.
+Question 6:
+Which of the following is a primary function of an operating system?
+A. Creating spreadsheets
+B. Editing photographs
+C. Managing computer hardware and software resources
+D. Designing web pages
+Correct Answer: C
+Explanation:
+An operating system's core role is to manage a computer's hardware (such as memory, storage, and
+processing) and coordinate how software programs use those resources. Creating spreadsheets,
+editing photographs, and designing web pages are tasks performed using specific application
+software, not functions of the operating system itself.
+Question 7:
+Which type of operating system allows multiple users to access a computer system at the same
+time?
+A. Single-user OS
+B. Real-time OS
+C. Embedded OS
+D. Multi-user OS
+Correct Answer: D
+Explanation:
+A multi-user operating system is specifically designed to allow several users to access the same
+computer system's resources simultaneously, often over a network. A single-user OS supports only
+one user at a time, a real-time OS is designed for immediate processing of time-critical tasks, and an
+embedded OS runs on a single dedicated device, such as a microwave or ATM.
+Question 8:
+Which of the following is an example of application software rather than system software?
+A. Device driver
+B. Word processor
+C. Operating system
+D. Compiler
+Correct Answer: B
+Explanation:
+A word processor is application software because it is designed to help users perform a specific task,
+such as writing documents. Device drivers, operating systems, and compilers are all classified as
+system software because they manage hardware or support the running of other programs rather
+than performing an end-user task directly.
+Question 9:
+In programming, which of the following data types is used to store a value such as 'True' or
+'False'?
+A. Boolean
+B. Integer
+C. String
+D. Float
+Correct Answer: A
+Explanation:
+A Boolean data type stores one of exactly two logical values, True or False, and is commonly used for
+conditions and comparisons in programs. An integer stores whole numbers, a string stores text, and a
+float stores decimal numbers, none of which represent True/False values.
+Question 10:
+In a flowchart, which shape is used to represent a decision point?
+A. Rectangle
+B. Oval
+C. Diamond
+D. Parallelogram
+Correct Answer: C
+Explanation:
+A diamond (rhombus) shape is the standard flowchart symbol used to represent a decision point,
+where the flow of the program branches based on a condition (such as yes/no or true/false). A
+rectangle represents a process step, an oval represents the start or end of a flowchart, and a
+parallelogram represents input or output.
+Question 11:
+Which control structure is used to repeat a set of instructions until a certain condition is met?
+A. Sequence
+B. Selection
+C. Function
+D. Loop
+Correct Answer: D
+Explanation:
+A loop (such as a 'for' or 'while' loop) is the control structure specifically designed to repeat a block of
+instructions until a defined condition is satisfied. A sequence structure simply executes instructions in
+order, a selection structure chooses between different paths based on a condition without repetition,
+and a function is a reusable block of code, not a repetition structure itself.
+Question 12:
+In a database table, which term describes a field that uniquely identifies each record?
+A. Foreign key
+B. Primary key
+C. Candidate value
+D. Attribute label
+Correct Answer: B
+Explanation:
+A primary key is a field (or combination of fields) whose value is unique for every record in a table,
+ensuring that each row can be distinctly identified. A foreign key instead links one table to another by
+referencing a primary key in a different table, while 'candidate value' and 'attribute label' are not
+standard database terms for this function.
+Question 13:
+Which of the following is an example of database management system (DBMS) software?
+A. MySQL
+B. Photoshop
+C. PowerPoint
+D. AutoCAD
+Correct Answer: A
+Explanation:
+MySQL is a widely used database management system designed to store, organize, and retrieve
+structured data. Photoshop is image-editing software, PowerPoint is presentation software, and
+AutoCAD is computer-aided design software — none of which are used to manage databases.
+Question 14:
+In which network topology are all devices connected to a single central cable, known as the
+backbone?
+A. Star topology
+B. Ring topology
+C. Mesh topology
+D. Bus topology
+Correct Answer: D
+Explanation:
+In a bus topology, every device on the network connects to one shared central cable called the
+backbone, along which data signals travel. In a star topology devices connect to a central hub or
+switch instead of a shared cable, in a ring topology devices are connected in a closed loop, and in a
+mesh topology devices are interconnected with multiple direct links.
+Question 15:
+Which of the following best describes a Wide Area Network (WAN)?
+A. A network that connects devices within a single room
+B. A network limited to one building
+C. A network that connects computers across large geographical distances
+D. A network used only for wireless printers
+Correct Answer: C
+Explanation:
+A Wide Area Network (WAN) connects computers and networks over large geographical distances,
+such as between cities or countries, with the internet being the largest example. A network confined
+to a single room or building instead describes a Local Area Network (LAN), and WANs are not limited
+to connecting printers.
+Question 16:
+What is the main difference between HTTP and HTTPS?
+A. HTTP is used only for email, while HTTPS is used for browsing.
+B. HTTPS encrypts data transmitted between the browser and the server, while HTTP does
+not.
+C. HTTP is faster because it uses more security layers than HTTPS.
+D. HTTPS can only be used on mobile devices.
+Correct Answer: B
+Explanation:
+HTTPS (Hypertext Transfer Protocol Secure) encrypts the data exchanged between a web browser
+and a server, protecting it from being intercepted, while standard HTTP transmits data without this
+encryption. HTTP is not used exclusively for email, HTTPS does not make browsing faster by adding
+more security layers, and HTTPS works on any device with a compatible browser, not only mobile
+devices.
+Question 17:
+What is the main purpose of a domain name system (DNS)?
+A. To translate human-readable domain names into IP addresses
+B. To encrypt data sent over the internet
+C. To compress large files for storage
+D. To protect a computer from viruses
+Correct Answer: A
+Explanation:
+The Domain Name System (DNS) translates easy-to-remember domain names, such as
+www.example.com, into the numerical IP addresses that computers use to locate each other on a
+network. DNS does not encrypt data, compress files, or protect against viruses — those functions
+belong to other technologies such as HTTPS, compression software, and antivirus programs.
+Question 18:
+Which of the following is considered good netiquette when writing a professional email?
+A. Writing the entire message in uppercase letters
+B. Using informal slang and abbreviations
+C. Ignoring the subject line
+D. Using a clear subject line and polite, professional language
+Correct Answer: D
+Explanation:
+Good netiquette in professional communication involves using a clear, descriptive subject line along
+with polite and professional language so the recipient can quickly understand the email's purpose.
+Writing in all uppercase is generally considered equivalent to shouting, using slang is inappropriate in
+formal contexts, and leaving the subject line blank makes the email harder to identify and prioritize.
+Question 19:
+Which type of malicious software secretly monitors and collects a user's personal information
+without consent?
+A. Firewall
+B. Antivirus
+C. Spyware
+D. Utility software
+Correct Answer: C
+Explanation:
+Spyware is a type of malicious software specifically designed to secretly monitor a user's activity and
+collect personal information, such as browsing habits or passwords, without their knowledge or
+consent. A firewall and antivirus software are protective tools designed to block or detect threats, and
+utility software refers to programs that help maintain or optimize a computer system, not malicious
+programs.
+Question 20:
+A user receives an email pretending to be from their bank, asking them to click a link and enter
+their password. This is an example of:
+A. Encryption
+B. Phishing
+C. Firewalling
+D. Data backup
+Correct Answer: B
+Explanation:
+Phishing is a cyberattack technique in which fraudulent messages impersonate a trustworthy source,
+such as a bank, to trick users into revealing sensitive information like passwords. Encryption is a
+method of protecting data, firewalling refers to blocking unauthorized network access, and data
+backup refers to creating copies of data for safekeeping — none of which describe this deceptive
+scenario.
+Question 21:
+Which of the following actions best demonstrates responsible digital citizenship?
+A. Sharing other people's personal photos without their permission
+B. Using someone else's password to access their account
+C. Copying an author's work and submitting it as your own
+D. Respecting others' privacy and giving credit when using their work online
+Correct Answer: D
+Explanation:
+Responsible digital citizenship involves behaving ethically online, including respecting other people's
+privacy and properly crediting the original creators of content that is used or referenced. Sharing
+others' photos without consent, using someone else's password without permission, and presenting
+another person's work as your own are all examples of irresponsible or unethical digital behavior.
+Question 22:
+What is the main advantage of storing files using cloud computing services?
+A. Files can be accessed from any device with an internet connection
+B. Files are automatically converted into different file formats
+C. Files require no storage space anywhere
+D. Files can never be deleted once uploaded
+Correct Answer: A
+Explanation:
+A key benefit of cloud computing is that files stored on remote servers can be accessed from any
+device that has an internet connection, rather than being tied to a single physical machine. Cloud
+storage does not automatically convert file formats, it still relies on physical storage space on remote
+servers (it does not eliminate storage needs), and files stored in the cloud can generally still be
+deleted by the user.
+Question 23:
+Which feature in a word processor is used to automatically check and correct spelling errors as
+you type?
+A. Mail merge
+B. Track changes
+C. Spell check
+D. Page layout
+Correct Answer: C
+Explanation:
+The spell check feature scans text as it is typed and automatically flags or corrects spelling errors
+based on a built-in dictionary. Mail merge is used to combine a document with a data source to create
+personalized copies, track changes records edits made by different users, and page layout controls
+the visual arrangement of a document — none of which are related to spelling correction.
+Question 24:
+In a spreadsheet, which formula would correctly calculate the sum of values in cells A1 through
+A10?
+A. =TOTAL(A1:A10)
+B. =SUM(A1:A10)
+C. =ADD(A1-A10)
+D. =SUM(A1,A10)
+Correct Answer: B
+Explanation:
+The correct spreadsheet function for adding a range of values is SUM, and the colon (:) is used to
+indicate a continuous range from A1 to A10, so '=SUM(A1:A10)' is correct. 'TOTAL' and 'ADD' are not
+valid spreadsheet functions for this purpose, and '=SUM(A1,A10)' would add only the two individual
+cells A1 and A10, not the full range between them.
+Question 25:
+Which feature in presentation software is used to control how one slide changes to the next
+during a slideshow?
+A. Slide master
+B. Animation
+C. Slide layout
+D. Slide transition
+Correct Answer: D
+Explanation:
+A slide transition controls the visual effect that occurs as the presentation moves from one slide to the
+next, such as a fade or wipe effect. The slide master controls the overall design template applied to all
+slides, animation controls the movement of individual objects within a single slide, and slide layout
+determines the arrangement of placeholders on a slide — none of which control the change between
+slides.

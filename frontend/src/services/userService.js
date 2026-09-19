@@ -59,6 +59,34 @@ const userService = {
     const { data } = await api.put(`/users/${userId}/role`, { role_id });
     return data;
   },
+
+  // ── Super Admin: delete user permanently ───────────────
+  deleteUser: async (userId) => {
+    const { data } = await api.delete(`/users/${userId}`);
+    return data;
+  },
+
+  // ── Admin/Super Admin: get user activity ───────────────
+  getUserActivity: async (userId) => {
+    const { data } = await api.get(`/users/${userId}/activity`);
+    return data.data;
+  },
+
+  // ── Admin/Super Admin: export filtered users as CSV ────
+  // Returns a Blob URL the browser can download directly.
+  exportUsers: async (params = {}) => {
+    const response = await api.get('/users/export', {
+      params,
+      responseType: 'blob',
+    });
+    return response.data; // Blob
+  },
+
+  // ── Super Admin: update email verification status ──────
+  updateEmailVerification: async (userId, is_email_verified) => {
+    const { data } = await api.put(`/users/${userId}/email-verification`, { is_email_verified });
+    return data.data;
+  },
 };
 
 export default userService;

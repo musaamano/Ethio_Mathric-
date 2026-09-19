@@ -39,6 +39,13 @@ const FREE_SUBJECT_DAILY_LIMIT = 20;
 const VALID_SUBMIT_OPTIONS = new Set(['A', 'B', 'C', 'D']);
 const VALID_OPTIONS = new Set(['A', 'B', 'C', 'D']);
 
+function normalizeSubmitOption(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const normalized = String(value).trim().toUpperCase();
+  const match = normalized.match(/^([A-D])(?:[.)\-:]*)$/);
+  return match ? match[1] : null;
+}
+
 function parsePositiveInteger(value) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
@@ -117,11 +124,19 @@ const getQuestions = async (req, res, next) => {
     const {
       subject_id, difficulty, type,
       search, page = 1, limit = 20, is_free,
-      category, year,
+      category, year, is_active,
     } = req.query;
 
-    const where = ['q.is_active = TRUE'];
+    const where = [];
     const params = [];
+
+    // Default to active only if is_active not specified
+    if (is_active !== undefined && is_active !== '') {
+      params.push(is_active === 'true');
+      where.push(`q.is_active = $${params.length}`);
+    } else {
+      where.push('q.is_active = TRUE');
+    }
 
     if (subject_id) { params.push(subject_id); where.push(`q.subject_id = $${params.length}`); }
     if (difficulty) { params.push(difficulty); where.push(`q.difficulty = $${params.length}`); }
@@ -178,13 +193,24 @@ const getQuestions = async (req, res, next) => {
 const getQuestion = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { rows: questions } = await pool.query(
-      `SELECT q.*, s.name AS subject_name
-       FROM questions q
-       LEFT JOIN subjects s ON s.id = q.subject_id
-       WHERE q.id = $1 AND q.is_active = TRUE`,
-      [id]
-    );
+    const { is_active: isActiveParam } = req.query;
+
+    let query = `SELECT q.*, s.name AS subject_name
+                 FROM questions q
+                 LEFT JOIN subjects s ON s.id = q.subject_id
+                 WHERE q.id = $1`;
+    const params = [id];
+
+    // Admin can view inactive questions by passing is_active=false
+    if (isActiveParam !== undefined && isActiveParam !== '') {
+      params.push(isActiveParam === 'true');
+      query += ` AND q.is_active = $${params.length}`;
+    } else {
+      // Default to active only
+      query += ` AND q.is_active = TRUE`;
+    }
+
+    const { rows: questions } = await pool.query(query, params);
     if (!questions.length) return R.notFound(res, 'Question not found');
 
     const question = questions[0];
@@ -210,12 +236,15 @@ const getPracticeQuestions = async (req, res, next) => {
     const { subject_id, mode = 'practice' } = req.query;
     const hasSubscription = req.hasSubscription;
     const year = req.query.year ? parseInt(req.query.year) : null;
+    const excludeCompleted = req.query.exclude_completed === 'true';
 
-    const count = Math.min(100, Math.max(1, parseInt(req.query.count) || 10));
     if (subject_id && isNaN(parseInt(subject_id))) return R.badRequest(res, 'Invalid subject_id');
 
     const VALID_MODES = new Set(['practice', 'past_year', 'random']);
     const safeMode = VALID_MODES.has(mode) ? mode : 'practice';
+    const count = safeMode === 'practice'
+      ? 100
+      : Math.min(100, Math.max(1, parseInt(req.query.count) || 10));
 
     const where = ['q.is_active = TRUE'];
     const params = [];
@@ -233,6 +262,19 @@ const getPracticeQuestions = async (req, res, next) => {
       } else {
         where.push('q.year IS NOT NULL');
       }
+    }
+
+    // Derive progression from existing history without changing the schema.
+    if (excludeCompleted && safeMode === 'practice' && subject_id) {
+      params.push(req.user.id);
+      where.push(`q.id NOT IN (
+        SELECT ra.question_id
+        FROM result_answers ra
+        INNER JOIN results r ON r.id = ra.result_id
+        WHERE r.user_id = $${params.length}
+          AND r.subject_id = q.subject_id
+          AND r.mode = 'practice'
+      )`);
     }
 
     const whereClause = `WHERE ${where.join(' AND ')}`;
@@ -288,21 +330,26 @@ const getPracticeQuestions = async (req, res, next) => {
     let questions = [];
     if (totalCount > 0) {
       const safeCount = Math.min(availableCount, totalCount);
+      const progressionOrder = excludeCompleted && safeMode === 'practice'
+        ? ' ORDER BY q.id ASC'
+        : '';
 
-      if (totalCount <= count) {
+      if (totalCount <= safeCount) {
         const { rows } = await pool.query(
           `SELECT q.id, q.question_text, q.type, q.image_url, q.difficulty,
                   q.subject_id, q.exam_importance, q.year,
                   s.name AS subject_name
            FROM questions q
            LEFT JOIN subjects s ON s.id = q.subject_id
-           ${whereClause}`,
+           ${whereClause}${progressionOrder}`,
           params
         );
-        // Fisher-Yates shuffle
-        for (let i = rows.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [rows[i], rows[j]] = [rows[j], rows[i]];
+        if (!excludeCompleted || safeMode !== 'practice') {
+          // Fisher-Yates shuffle for ordinary sessions.
+          for (let i = rows.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [rows[i], rows[j]] = [rows[j], rows[i]];
+          }
         }
         questions = rows.slice(0, safeCount);
       } else {
@@ -316,6 +363,7 @@ const getPracticeQuestions = async (req, res, next) => {
            FROM questions q
            LEFT JOIN subjects s ON s.id = q.subject_id
            ${whereClause}
+           ${progressionOrder}
            LIMIT $${limitParam} OFFSET $${offsetParam}`,
           [...params, safeCount, offset]
         );
@@ -455,16 +503,15 @@ const createSubmitAnswers = (getClientFn = getClient) => async (req, res, next) 
       if (seenQuestionIds.has(qId)) continue;
       seenQuestionIds.add(qId);
 
-      const selected = ans.selected_option
-        ? ans.selected_option.toString().trim().toUpperCase()
-        : null;
+      const selected = normalizeSubmitOption(ans.selected_option);
 
-      if (selected && !VALID_OPTIONS.has(selected)) continue;
+      if (ans.selected_option && !selected) continue;
 
       const correctData = correctMap[qId];
       if (!correctData) continue;
 
-      const correctLabel = correctData.option_label.trim().toUpperCase();
+      const correctLabel = normalizeSubmitOption(correctData.option_label);
+      if (!correctLabel) continue;
       const is_correct = selected === correctLabel;
 
       if (!selected) skipped++;
@@ -483,9 +530,9 @@ const createSubmitAnswers = (getClientFn = getClient) => async (req, res, next) 
     }
 
     const validSubmittedCount = answerDetails.filter(answer => answer.selected_option).length;
-    if (validSubmittedCount === 0) {
+    if (answerDetails.length === 0) {
       await client.query('ROLLBACK');
-      return R.badRequest(res, 'No valid submitted answers provided');
+      return R.badRequest(res, 'No valid answers provided');
     }
 
     if (!hasSubscription && subjectIdInt && !Number.isNaN(subjectIdInt)) {
@@ -713,6 +760,14 @@ const deleteQuestion = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// ADMIN: TOGGLE QUESTION ACTIVE STATUS
+const toggleQuestionStatus = async (req, res, next) => {
+  try {
+    await pool.query('UPDATE questions SET is_active = NOT is_active WHERE id = $1', [req.params.id]);
+    return R.success(res, {}, 'Question status updated');
+  } catch (err) { next(err); }
+};
+
 // ─────────────────────────────────────────────
 // ADMIN: IMPORT FROM EXCEL/CSV
 // chapter_id and topic columns ignored if present in file.
@@ -899,6 +954,6 @@ module.exports = {
   computeSubmittedAnswerCount,
   getDailyLimitStatus,
   getQuestions, getQuestion, getPracticeQuestions, getAvailableYears,
-  getSubjectDailyUsage, submitAnswers, createSubmitAnswers, createQuestion, updateQuestion, deleteQuestion,
+  getSubjectDailyUsage, submitAnswers, createSubmitAnswers, createQuestion, updateQuestion, deleteQuestion, toggleQuestionStatus,
   importQuestions, toggleBookmark, getBookmarks, reportQuestion,
 };

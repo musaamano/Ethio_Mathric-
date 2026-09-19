@@ -250,9 +250,21 @@ async function runBulkPipeline(
         continue;
       }
 
+      // Count specific validation errors
       if (!q.correct_option) missingAnswer++;
       if (!q.has_explanation) missingExplanation++;
       if (errors.length > 0) formattingErrors++;
+
+      // Reject questions with missing correct answer or explanation
+      // Only add to toImport if the question passes all required validation
+      const hasMissingAnswerError = errors.some(err => /correct answer/i.test(err));
+      const hasMissingExplanationError = errors.some(err => /explanation/i.test(err));
+
+      if (hasMissingAnswerError || hasMissingExplanationError) {
+        skipped.push(q);
+        continue;
+      }
+
       toImport.push(q);
     }
 
