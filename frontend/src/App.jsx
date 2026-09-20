@@ -38,6 +38,7 @@ const BookmarksPage = lazy(() => import('./pages/student/BookmarksPage'));
 const HistoryPage = lazy(() => import('./pages/student/HistoryPage'));
 const LeaderboardPage = lazy(() => import('./pages/student/LeaderboardPage'));
 const SubscriptionPage = lazy(() => import('./pages/student/SubscriptionPage'));
+const PaymentResultPage = lazy(() => import('./pages/student/PaymentResultPage'));
 const ProfilePage = lazy(() => import('./pages/student/ProfilePage'));
 const SettingsPage = lazy(() => import('./pages/student/SettingsPage'));
 
@@ -107,6 +108,7 @@ export default function App() {
       <Route path="/dashboard/history" element={<Wrap><HistoryPage /></Wrap>} />
       <Route path="/dashboard/leaderboard" element={<Wrap><LeaderboardPage /></Wrap>} />
       <Route path="/dashboard/subscription" element={<Wrap><SubscriptionPage /></Wrap>} />
+      <Route path="/dashboard/payment-result" element={<Wrap><PaymentResultPage /></Wrap>} />
       <Route path="/dashboard/profile" element={<Wrap><ProfilePage /></Wrap>} />
       <Route path="/dashboard/settings" element={<Wrap><SettingsPage /></Wrap>} />
 

@@ -321,6 +321,31 @@ const getMySubscription = async (req, res, next) => {
 };
 
 // ─────────────────────────────────────────────
+// GET MY PAYMENT STATUS
+// Returns only the authenticated user's payment identified by its gateway ref.
+// ─────────────────────────────────────────────
+const getMyPaymentStatus = async (req, res, next) => {
+  try {
+    const txRef = String(req.query.tx_ref || '').trim();
+    if (!txRef) return R.badRequest(res, 'tx_ref is required');
+
+    const { rows } = await pool.query(
+      `SELECT p.amount_etb, p.currency, p.gateway, p.gateway_ref,
+              p.gateway_tx_id, p.status, p.created_at, p.updated_at,
+              s.status AS subscription_status
+       FROM payments p
+       LEFT JOIN subscriptions s ON s.id = p.subscription_id
+       WHERE p.user_id = $1 AND p.gateway_ref = $2
+       LIMIT 1`,
+      [req.user.id, txRef]
+    );
+
+    if (!rows.length) return R.notFound(res, 'Payment not found');
+    return R.success(res, rows[0]);
+  } catch (err) { next(err); }
+};
+
+// ─────────────────────────────────────────────
 // INITIATE PAYMENT — Priority 4 + 6
 // Validates input, blocks duplicate active-subscription
 // payments, reuses recent pending Chapa payments to
@@ -769,6 +794,6 @@ const approvePayment = async (req, res, next) => {
 };
 
 module.exports = {
-  getPlans, getMySubscription, initiatePayment,
+  getPlans, getMySubscription, getMyPaymentStatus, initiatePayment,
   chapaCallback, getAllPayments, approvePayment,
 };

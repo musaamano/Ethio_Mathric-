@@ -18,6 +18,12 @@ const paymentService = {
     return data.data; // null if no active subscription
   },
 
+  // ── Get current user's payment status ──────────────────
+  getPaymentStatus: async (txRef) => {
+    const { data } = await api.get('/payments/status', { params: { tx_ref: txRef } });
+    return data.data;
+  },
+
   // ── Initiate payment ────────────────────────────────────
   // payload: { plan_id, gateway: 'chapa' | 'telebirr' | 'santimpay' }
   initiatePayment: async (payload) => {
