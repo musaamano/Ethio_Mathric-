@@ -9,6 +9,7 @@ import { useToast } from '../../components/common/Toast';
 import { validators, STREAM_OPTIONS, ETHIOPIAN_REGIONS } from '../../utils/helpers';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
+import authService from '../../services/authService';
 
 const STEPS = ['Account', 'Profile', 'Stream'];
 
@@ -17,6 +18,8 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [registrationResult, setRegistrationResult] = useState(null);
   const [selectedStream, setSelectedStream] = useState('');
 
   const {
@@ -42,9 +45,7 @@ export default function RegisterPage() {
     if (!selectedStream) { toast.warning('Please select your stream'); return; }
     setLoading(true);
     try {
-      // Import authService directly to call register first
-      const { default: authService } = await import('../../services/authService');
-      await authService.register({
+      const result = await authService.register({
         first_name: data.first_name,
         last_name: data.last_name,
         email: data.email,
@@ -55,14 +56,33 @@ export default function RegisterPage() {
         region: data.region || undefined,
       });
 
-      toast.success('Account created! Check your email to verify your account.');
-      navigate('/login', { replace: true });
+      setRegistrationResult({
+        email: data.email,
+        duplicateUnverified: result?.data?.verification_required && !result?.data?.id,
+      });
     } catch (err) {
-      const msg = err?.response?.data?.message || 'Registration failed. Please try again.';
-      toast.error(msg);
-      setStep(0); // go back to email step on conflict
+      const errorData = err?.response?.data;
+      if (errorData?.code === 'ACCOUNT_EXISTS_VERIFIED') {
+        setRegistrationResult({ email: data.email, duplicateVerified: true });
+      } else {
+        toast.error(errorData?.message || 'Registration failed. Please try again.');
+        setStep(0);
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!registrationResult?.email) return;
+    setResending(true);
+    try {
+      await authService.resendVerification(registrationResult.email);
+      toast.success('Verification link sent! Check your inbox.');
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to resend verification email.');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -96,8 +116,8 @@ export default function RegisterPage() {
               <React.Fragment key={s}>
                 <div className="flex items-center gap-1.5">
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${i < step ? 'bg-green-gradient text-white' :
-                      i === step ? 'bg-primary-500 text-white shadow-glow-green' :
-                        'bg-gray-100 text-gray-400'
+                    i === step ? 'bg-primary-500 text-white shadow-glow-green' :
+                      'bg-gray-100 text-gray-400'
                     }`}>
                     {i < step ? (
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -114,124 +134,154 @@ export default function RegisterPage() {
             ))}
           </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} noValidate>
-
-            {/* ── Step 0: Name + Email ── */}
-            {step === 0 && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <Input label="First Name" name="first_name" placeholder="Selam" required
-                    error={errors.first_name?.message}
-                    {...register('first_name', { validate: validators.required })} />
-                  <Input label="Last Name" name="last_name" placeholder="Bekele" required
-                    error={errors.last_name?.message}
-                    {...register('last_name', { validate: validators.required })} />
-                </div>
-                <Input label="Email Address" name="email" type="email" placeholder="you@example.com" required
-                  error={errors.email?.message}
-                  leftIcon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>}
-                  {...register('email', { required: 'Email is required', validate: validators.email })} />
-                <Input label="Phone (optional)" name="phone" type="tel" placeholder="09xxxxxxxx"
-                  error={errors.phone?.message}
-                  {...register('phone', { validate: validators.phone })} />
-                <Button type="button" fullWidth size="lg" onClick={nextStep}>
-                  Continue
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                  </svg>
+          {registrationResult ? (
+            <div className="space-y-5 text-center">
+              <div className={`w-16 h-16 rounded-3xl flex items-center justify-center text-4xl mx-auto ${registrationResult.duplicateVerified ? 'bg-yellow-50' : 'bg-mint-light'}`}>
+                {registrationResult.duplicateVerified ? 'ℹ️' : '✉️'}
+              </div>
+              <div>
+                <h2 className="font-display font-extrabold text-2xl text-primary-700">
+                  {registrationResult.duplicateVerified ? 'Account Already Exists' : 'Account Created Successfully!'}
+                </h2>
+                <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+                  {registrationResult.duplicateVerified
+                    ? 'An account with this email already exists. Please go to login or use the forgot-password flow.'
+                    : registrationResult.duplicateUnverified
+                      ? 'This email has an account that has not yet been verified. We sent a new verification link.'
+                      : "We've created your Ethio Matric Academy account. Please check your email and click the verification link to activate your account."}
+                </p>
+              </div>
+              <div className="space-y-3">
+                {!registrationResult.duplicateVerified && (
+                  <Button fullWidth onClick={handleResend} loading={resending} variant="secondary">
+                    Resend Verification Email
+                  </Button>
+                )}
+                <Button fullWidth variant="outline" onClick={() => navigate('/login')}>
+                  {registrationResult.duplicateVerified ? 'Go to Login' : 'Back to Login'}
                 </Button>
               </div>
-            )}
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit(onSubmit)} noValidate>
 
-            {/* ── Step 1: Password ── */}
-            {step === 1 && (
-              <div className="space-y-4">
-                <Input label="Password" name="password" type="password" placeholder="Min 8 chars, 1 uppercase, 1 number" required
-                  error={errors.password?.message}
-                  leftIcon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>}
-                  {...register('password', { required: 'Password is required', validate: validators.strongPassword })} />
-                <Input label="Confirm Password" name="confirm_password" type="password" placeholder="Re-enter your password" required
-                  error={errors.confirm_password?.message}
-                  {...register('confirm_password', {
-                    required: 'Please confirm your password',
-                    validate: (v) => v === password || 'Passwords do not match',
-                  })} />
-
-                {/* Password strength hint */}
-                <div className="p-3 bg-mint-light rounded-2xl text-xs text-sage-700 space-y-1">
-                  {[
-                    { test: password?.length >= 8, text: 'At least 8 characters' },
-                    { test: /[A-Z]/.test(password), text: 'One uppercase letter' },
-                    { test: /[0-9]/.test(password), text: 'One number' },
-                  ].map(r => (
-                    <div key={r.text} className="flex items-center gap-2">
-                      <span className={r.test ? 'text-sage-500' : 'text-gray-300'}>
-                        {r.test ? '✓' : '○'}
-                      </span>
-                      {r.text}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex gap-3">
-                  <Button type="button" variant="outline" fullWidth onClick={() => setStep(0)}>Back</Button>
-                  <Button type="button" fullWidth onClick={nextStep}>Continue</Button>
-                </div>
-              </div>
-            )}
-
-            {/* ── Step 2: Stream + School + Region ── */}
-            {step === 2 && (
-              <div className="space-y-5">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Your Stream <span className="text-red-500">*</span>
-                  </label>
+              {/* ── Step 0: Name + Email ── */}
+              {step === 0 && (
+                <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
-                    {STREAM_OPTIONS.map(opt => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => { setSelectedStream(opt.value); setValue('stream', opt.value); }}
-                        className={`p-4 rounded-2xl border-2 text-left transition-all ${selectedStream === opt.value
-                            ? 'border-primary-500 bg-primary-50 shadow-glow-green'
-                            : 'border-mint-dark/30 bg-white hover:border-primary-300'
-                          }`}
-                      >
-                        <div className="text-2xl mb-1">{opt.label.split(' ')[0]}</div>
-                        <div className="text-xs font-bold text-primary-700">{opt.label.slice(3)}</div>
-                      </button>
-                    ))}
+                    <Input label="First Name" name="first_name" placeholder="Selam" required
+                      error={errors.first_name?.message}
+                      {...register('first_name', { validate: validators.required })} />
+                    <Input label="Last Name" name="last_name" placeholder="Bekele" required
+                      error={errors.last_name?.message}
+                      {...register('last_name', { validate: validators.required })} />
                   </div>
-                </div>
-
-                <Input label="School Name (optional)" name="school" placeholder="Your school name"
-                  {...register('school')} />
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                    Region (optional)
-                  </label>
-                  <select
-                    {...register('region')}
-                    className="input-field text-sm"
-                  >
-                    <option value="">Select your region...</option>
-                    {ETHIOPIAN_REGIONS.map(r => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex gap-3">
-                  <Button type="button" variant="outline" fullWidth onClick={() => setStep(1)}>Back</Button>
-                  <Button type="submit" fullWidth size="lg" loading={loading}>
-                    Create Account 🎉
+                  <Input label="Email Address" name="email" type="email" placeholder="you@example.com" required
+                    error={errors.email?.message}
+                    leftIcon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>}
+                    {...register('email', { required: 'Email is required', validate: validators.email })} />
+                  <Input label="Phone (optional)" name="phone" type="tel" placeholder="09xxxxxxxx"
+                    error={errors.phone?.message}
+                    {...register('phone', { validate: validators.phone })} />
+                  <Button type="button" fullWidth size="lg" onClick={nextStep}>
+                    Continue
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                    </svg>
                   </Button>
                 </div>
-              </div>
-            )}
-          </form>
+              )}
+
+              {/* ── Step 1: Password ── */}
+              {step === 1 && (
+                <div className="space-y-4">
+                  <Input label="Password" name="password" type="password" placeholder="Min 8 chars, 1 uppercase, 1 number" required
+                    error={errors.password?.message}
+                    leftIcon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>}
+                    {...register('password', { required: 'Password is required', validate: validators.strongPassword })} />
+                  <Input label="Confirm Password" name="confirm_password" type="password" placeholder="Re-enter your password" required
+                    error={errors.confirm_password?.message}
+                    {...register('confirm_password', {
+                      required: 'Please confirm your password',
+                      validate: (v) => v === password || 'Passwords do not match',
+                    })} />
+
+                  {/* Password strength hint */}
+                  <div className="p-3 bg-mint-light rounded-2xl text-xs text-sage-700 space-y-1">
+                    {[
+                      { test: password?.length >= 8, text: 'At least 8 characters' },
+                      { test: /[A-Z]/.test(password), text: 'One uppercase letter' },
+                      { test: /[0-9]/.test(password), text: 'One number' },
+                    ].map(r => (
+                      <div key={r.text} className="flex items-center gap-2">
+                        <span className={r.test ? 'text-sage-500' : 'text-gray-300'}>
+                          {r.test ? '✓' : '○'}
+                        </span>
+                        {r.text}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-3">
+                    <Button type="button" variant="outline" fullWidth onClick={() => setStep(0)}>Back</Button>
+                    <Button type="button" fullWidth onClick={nextStep}>Continue</Button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Step 2: Stream + School + Region ── */}
+              {step === 2 && (
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Your Stream <span className="text-red-500">*</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {STREAM_OPTIONS.map(opt => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => { setSelectedStream(opt.value); setValue('stream', opt.value); }}
+                          className={`p-4 rounded-2xl border-2 text-left transition-all ${selectedStream === opt.value
+                            ? 'border-primary-500 bg-primary-50 shadow-glow-green'
+                            : 'border-mint-dark/30 bg-white hover:border-primary-300'
+                            }`}
+                        >
+                          <div className="text-2xl mb-1">{opt.label.split(' ')[0]}</div>
+                          <div className="text-xs font-bold text-primary-700">{opt.label.slice(3)}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <Input label="School Name (optional)" name="school" placeholder="Your school name"
+                    {...register('school')} />
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                      Region (optional)
+                    </label>
+                    <select
+                      {...register('region')}
+                      className="input-field text-sm"
+                    >
+                      <option value="">Select your region...</option>
+                      {ETHIOPIAN_REGIONS.map(r => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <Button type="button" variant="outline" fullWidth onClick={() => setStep(1)}>Back</Button>
+                    <Button type="submit" fullWidth size="lg" loading={loading}>
+                      Create Account 🎉
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </form>
+          )}
 
           {step === 0 && (
             <>

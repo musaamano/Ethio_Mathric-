@@ -6,7 +6,7 @@
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const UAParser = require('ua-parser-js');
-const { pool } = require('../config/db');
+const { pool, getClient } = require('../config/db');
 const { signAccess, signRefresh, verifyRefresh } = require('../config/jwt');
 const R = require('../utils/apiResponse');
 const logger = require('../utils/logger');
@@ -18,22 +18,49 @@ const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS) || 12;
 // REGISTER
 // ─────────────────────────────────────────────
 const register = async (req, res, next) => {
+  let client;
   try {
     const { first_name, last_name, email, password, phone, stream, school, region } = req.body;
 
+    client = await getClient();
+    await client.query('BEGIN');
+
     // Check duplicate email
-    const { rows: existing } = await pool.query(
-      'SELECT id FROM users WHERE email = $1', [email]
+    const { rows: existing } = await client.query(
+      'SELECT id, first_name, is_email_verified FROM users WHERE email = $1 FOR UPDATE', [email]
     );
     if (existing.length) {
-      return R.badRequest(res, 'An account with this email already exists');
+      const existingUser = existing[0];
+      if (existingUser.is_email_verified) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          success: false,
+          code: 'ACCOUNT_EXISTS_VERIFIED',
+          message: 'An account with this email already exists. Please log in.',
+        });
+      }
+
+      const verifyToken = uuidv4();
+      const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await client.query(
+        'UPDATE users SET email_verify_token = $1, email_verify_expires = $2 WHERE id = $3',
+        [verifyToken, verifyExpires, existingUser.id]
+      );
+      await sendVerificationEmail(email, existingUser.first_name, verifyToken);
+      await client.query('COMMIT');
+
+      return R.success(
+        res,
+        { email, verification_required: true },
+        'This email belongs to an unverified account. A new verification link has been sent.'
+      );
     }
 
     const password_hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     const verify_token = uuidv4();
     const verify_expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
-    const { rows: result } = await pool.query(
+    const { rows: result } = await client.query(
       `INSERT INTO users
          (first_name, last_name, email, phone, password_hash, stream, school, region,
           email_verify_token, email_verify_expires, role_id)
@@ -45,14 +72,18 @@ const register = async (req, res, next) => {
     );
 
     await sendVerificationEmail(email, first_name, verify_token);
+    await client.query('COMMIT');
     logger.info(`New student registered: ${email}`);
 
     return R.created(res,
-      { id: result[0].id, email },
+      { id: result[0].id, email, verification_required: true },
       'Registration successful. Please check your email to verify your account.'
     );
   } catch (err) {
+    if (client) await client.query('ROLLBACK').catch(() => { });
     next(err);
+  } finally {
+    if (client) client.release();
   }
 };
 

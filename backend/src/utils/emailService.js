@@ -63,17 +63,29 @@ async function sendMail({ to, subject, html, text }) {
 }
 
 // ── Shared style constants ────────────────────────────────────
-const BRAND_GREEN    = '#1B5E37';
-const BRAND_MID      = '#2D6A4F';
-const BRAND_LIGHT    = '#52B788';
-const BG_OUTER       = '#F0F4F1';
-const BG_CARD        = '#FFFFFF';
-const TEXT_DARK      = '#1A2E22';
-const TEXT_BODY      = '#374151';
-const TEXT_MUTED     = '#6B7280';
-const TEXT_FOOTER    = '#9CA3AF';
-const BORDER_CARD    = '#E5E7EB';
-const YEAR           = new Date().getFullYear();
+const BRAND_GREEN = '#1B5E37';
+const BRAND_MID = '#2D6A4F';
+const BRAND_LIGHT = '#52B788';
+const BG_OUTER = '#F0F4F1';
+const BG_CARD = '#FFFFFF';
+const TEXT_DARK = '#1A2E22';
+const TEXT_BODY = '#374151';
+const TEXT_MUTED = '#6B7280';
+const TEXT_FOOTER = '#9CA3AF';
+const BORDER_CARD = '#E5E7EB';
+const YEAR = new Date().getFullYear();
+
+function getClientUrl() {
+  const fallbackOrigin = (process.env.CLIENT_URL || 'http://localhost:5174')
+    .split(',')[0]
+    .trim();
+  const configuredOrigins = (process.env.CLIENT_URL || 'http://localhost:5174')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean);
+  const clientUrl = configuredOrigins.find(origin => !/localhost|127\.0\.0\.1/.test(origin)) || fallbackOrigin;
+  return clientUrl.replace(/\/$/, '');
+}
 
 function emailWrapper(bodyContent) {
   return `<!DOCTYPE html>
@@ -143,7 +155,7 @@ function emailWrapper(bodyContent) {
  * @param {string} token       - Verification UUID token
  */
 async function sendVerificationEmail(to, firstName, token) {
-  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5174';
+  const clientUrl = getClientUrl();
   const verifyLink = `${clientUrl}/verify-email/${token}`;
 
   const bodyHtml = `
