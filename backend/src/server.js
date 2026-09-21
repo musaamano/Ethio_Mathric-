@@ -29,6 +29,7 @@ const reportRoutes = require('./routes/reportRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 const importRoutes = require('./routes/importRoutes');
+const diagnosticRoutes = require('./routes/diagnosticRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -151,6 +152,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/import', importRoutes);
+app.use('/api/diagnostics', diagnosticRoutes);
 
 // ─── Root route ──────────────────────────────
 app.get('/', (req, res) => {
